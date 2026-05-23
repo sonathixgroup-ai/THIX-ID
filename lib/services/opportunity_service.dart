@@ -1,9 +1,7 @@
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:thix_id/models/opportunity_application.dart';
 import 'package:thix_id/models/opportunity_item.dart';
 import 'package:thix_id/supabase/supabase_config.dart';
@@ -12,46 +10,6 @@ class OpportunityService {
   static const String table = 'thix_opportunities';
   static const _kOpps = 'thix_opportunities_v1';
   static const _kApplications = 'thix_opportunity_applications_v1';
-
-  /// Supabase Storage bucket for opportunity images.
-  /// Create it in Supabase → Storage (public recommended).
-  static const String imageBucket = 'thix_opportunity_images';
-
-  /// Upload an image to Supabase Storage and return a public URL.
-  Future<String> uploadOpportunityImage({required Uint8List bytes, required String extension}) async {
-    final ext = extension.trim().isEmpty ? 'jpg' : extension.trim().toLowerCase();
-    final uid = SupabaseConfig.currentUser?.id ?? 'anon';
-    final ts = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final objectPath = 'opportunities/$uid/$ts.$ext';
-
-    try {
-      await SupabaseConfig.storage.from(imageBucket).uploadBinary(
-            objectPath,
-            bytes,
-            fileOptions: FileOptions(
-              upsert: true,
-              cacheControl: '3600',
-              contentType: ext == 'png'
-                  ? 'image/png'
-                  : ext == 'webp'
-                      ? 'image/webp'
-                      : ext == 'gif'
-                          ? 'image/gif'
-                          : 'image/jpeg',
-            ),
-          );
-      final url = SupabaseConfig.storage.from(imageBucket).getPublicUrl(objectPath);
-      if (url.trim().isEmpty) throw Exception('Storage: getPublicUrl returned empty.');
-      return url;
-    } catch (e) {
-      final msg = e.toString();
-      debugPrint('OpportunityService.uploadOpportunityImage failed err=$msg');
-      if (msg.contains('Bucket') && msg.contains('not found')) {
-        throw Exception("Bucket Supabase Storage introuvable: '$imageBucket'. Crée-le (public) dans Supabase → Storage.");
-      }
-      throw Exception('Upload image échoué: $msg');
-    }
-  }
 
   Future<List<OpportunityItem>> listOpportunities() async {
     // 1) Try Supabase first so Admin content is visible.

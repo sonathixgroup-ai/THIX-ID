@@ -10,11 +10,7 @@ class ExternalLinkService {
       final uri = Uri.tryParse(v);
       if (uri == null) return false;
 
-      final ok = await launchUrl(
-        uri,
-        mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
-        webOnlyWindowName: kIsWeb ? '_blank' : null,
-      );
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok) debugPrint('ExternalLinkService.open failed url=$url');
       return ok;
     } catch (e) {

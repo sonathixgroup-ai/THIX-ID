@@ -205,12 +205,6 @@ class FirestoreUserService {
       }
     }
 
-    void putAliases(List<String> keys, Object? v) {
-      for (final k in keys) {
-        put(k, v);
-      }
-    }
-
     put('display_name', displayName);
     // Fix mapping: also write to `full_name` when present in the schema.
     put('full_name', fullName ?? displayName);
@@ -235,25 +229,18 @@ class FirestoreUserService {
     put('emergency_contact_phone', emergencyContactPhone);
     put('emergency_contact_relation', emergencyContactRelation);
 
-    // Origin / residence.
-    //
-    // IMPORTANT:
-    // Connected Supabase projects may have different column names for residence
-    // (ex: `pays_residence`, `province_residence`, `ville_residence`, etc.).
-    // We write aliases to prevent silent “not saved” issues when one variant is
-    // missing.
-    putAliases(['origin_province', 'province_origine'], originProvince);
-    putAliases(['origin_territory', 'territoire_origine'], originTerritory);
-    putAliases(['origin_sector', 'secteur_origine'], originSector);
-
-    putAliases(['residence_country', 'pays_residence', 'current_residence_country'], residenceCountry);
-    putAliases(['residence_province', 'province_residence'], residenceProvince);
-    putAliases(['residence_territory', 'territoire_residence'], residenceTerritory);
-    putAliases(['residence_city', 'ville_residence'], residenceCity);
-    putAliases(['residence_commune', 'commune_residence'], residenceCommune);
-    putAliases(['residence_quarter', 'quartier_residence'], residenceQuarter);
-    putAliases(['residence_avenue', 'avenue_residence'], residenceAvenue);
-    putAliases(['residence_number', 'numero_residence'], residenceNumber);
+    // Origin / residence (new structured personal fields).
+    put('origin_province', originProvince);
+    put('origin_territory', originTerritory);
+    put('origin_sector', originSector);
+    put('residence_country', residenceCountry);
+    put('residence_province', residenceProvince);
+    put('residence_territory', residenceTerritory);
+    put('residence_city', residenceCity);
+    put('residence_commune', residenceCommune);
+    put('residence_quarter', residenceQuarter);
+    put('residence_avenue', residenceAvenue);
+    put('residence_number', residenceNumber);
 
     if (emergencyContacts != null) patch['emergency_contacts'] = emergencyContacts;
     put('height', height);
@@ -367,7 +354,7 @@ class FirestoreUserService {
       // We use a DB-side unique constraint (migration) + retry loop to handle
       // concurrency races safely.
       for (var i = 0; i < 20; i++) {
-        final candidate = ThixIdService.generate(countryCode: cc).toUpperCase();
+        final candidate = ThixIdService.generateV2(countryCode: cc, displayName: nameForId).toUpperCase();
         try {
           await SupabaseSafeWrite.upsert(
             client: _client,

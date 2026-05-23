@@ -58,10 +58,7 @@ class EmergencyService {
 
   bool _isMissingTableError(Object e) => e is PostgrestException && (e.code == 'PGRST205' || e.message.contains('Could not find the table'));
 
-  // Supabase/PostgREST can surface missing-column errors in a couple of ways:
-  // - PostgREST: code=PGRST204
-  // - Postgres: code=42703 (undefined_column)
-  bool _isMissingColumnError(Object e) => e is PostgrestException && (e.code == 'PGRST204' || e.code == '42703' || e.message.toLowerCase().contains('does not exist'));
+  bool _isMissingColumnError(Object e) => e is PostgrestException && e.code == 'PGRST204';
 
   bool _isSchemaUnavailable(Object e) => _isMissingTableError(e) || _isMissingColumnError(e);
 
@@ -71,8 +68,6 @@ class EmergencyService {
   Timer? _trackingTimer;
   final AudioRecorder _recorder = AudioRecorder();
   String? _recordingPath;
-
-  bool _audioStreamActive = false;
 
   static const emergencyBucket = 'thix-emergency';
 
@@ -400,47 +395,6 @@ class EmergencyService {
     } catch (e) {
       debugPrint('EmergencyService: startAudioEvidenceRecording failed: $e');
       return null;
-    }
-  }
-
-  /// Records short audio chunks and uploads them to Supabase Storage.
-  ///
-  /// This provides a near real-time "listening" capability for admins:
-  /// each chunk becomes an evidence row and the alert's `audio_path` is updated
-  /// to the latest uploaded chunk.
-  ///
-  /// Notes:
-  /// - This is **foreground-only**. Mobile OSes will stop recording in background.
-  /// - Web recording is best-effort and may not produce a file path.
-  Future<void> startLiveAudioStreaming({required String alertId, Duration chunkDuration = const Duration(seconds: 10)}) async {
-    await stopLiveAudioStreaming();
-    _audioStreamActive = true;
-    unawaited(_audioStreamingLoop(alertId: alertId, chunkDuration: chunkDuration));
-  }
-
-  Future<void> stopLiveAudioStreaming() async {
-    _audioStreamActive = false;
-    try {
-      if (await _recorder.isRecording()) await _recorder.stop();
-    } catch (_) {}
-    _recordingPath = null;
-  }
-
-  Future<void> _audioStreamingLoop({required String alertId, required Duration chunkDuration}) async {
-    while (_audioStreamActive) {
-      try {
-        // Start chunk recording
-        await startAudioEvidenceRecording(alertId: alertId);
-        await Future<void>.delayed(chunkDuration);
-        if (!_audioStreamActive) break;
-
-        // Stop and upload this chunk
-        await stopAndUploadAudioEvidence(alertId: alertId);
-      } catch (e) {
-        debugPrint('EmergencyService: audio streaming loop error: $e');
-        // Backoff slightly to avoid tight loops on repeated failures.
-        await Future<void>.delayed(const Duration(seconds: 2));
-      }
     }
   }
 

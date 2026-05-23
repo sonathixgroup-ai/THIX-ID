@@ -3,352 +3,132 @@ import 'dart:ui';
 
 /// THIX ID generation + validation utilities.
 ///
-/// Country is FIXED to CD (République Démocratique du Congo).
-/// 
-/// Format actuel (recommandé) :
-///   THIX-CD-MMYY-RANDOM5-CODE3-CHECK
-///   Exemple: THIX-CD-0520-84723-XYZ-4
+/// We support multiple formats for backward compatibility.
 ///
-/// Format legacy (compatible) :
-///   THIX-CD-INITIALS-YY-TOKEN4-CHECK
-///   Exemple: THIX-CD-NLU-26-K8P4-7
+/// Recommended (current):
+///   THIX-[CC]-[MMYY]-[RANDOM5]-[CODE3]-[CHECK]
+///   - MMYY: month + year (e.g. 0426)
+///   - RANDOM5: 5 digits
+///   - CODE3: 3 letters
+///   - CHECK: verification key (1 digit)
+///   Example: THIX-CD-0426-48392-NJK-7
+///
+/// Legacy V2 (still accepted by validation):
+///   THIX-[CC]-[INIT]-[YY]-[TOKEN4]-[CHECK]
+///   Example: THIX-CD-NLU-26-K8P4-7
+///
+/// Notes:
+/// - The ID remains non-sensitive (no full name, no DOB).
+/// - A checksum digit helps detect typos.
 class ThixIdService {
-  // ==========================================================================
-  // CONSTANTES
-  // ==========================================================================
-  
-  /// Code pays fixé à la RDC
-  static const String _fixedCountryCode = 'CD';
-  
-  /// Alphabet pour les lettres
-  static const String _letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  
-  /// Alphabet pour les tokens (exclut O, I, 0, 1 pour éviter confusions)
-  static const String _tokenAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  
-  /// Générateur aléatoire sécurisé
-  static final Random _rnd = Random.secure();
-  
-  /// Exemple du format actuel
-  static const String exampleV2 = 'THIX-CD-0520-84723-XYZ-4';
-  
-  /// Exemple du format legacy
+  static const _letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  static const _tokenAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  static final _rnd = Random.secure();
+
+  /// Example of the recommended/current format.
+  static const String exampleV2 = 'THIX-CD-0426-48392-NJK-7';
+
+  /// Example of the legacy format.
   static const String exampleV1 = 'THIX-CD-NLU-26-K8P4-7';
 
-  // ==========================================================================
-  // MÉTHODES PUBLIQUES - GÉNÉRATION
-  // ==========================================================================
-
-  /// Génère un THIX ID avec le pays fixé à CD
-  static String generate({DateTime? now}) {
-    final ts = now ?? DateTime.now();
-    final mm = ts.month.toString().padLeft(2, '0');
-    final yy = (ts.year % 100).toString().padLeft(2, '0');
-    final mmyy = '$mm$yy';
-
-    final random5 = List.generate(5, (_) => _rnd.nextInt(10)).join();
-    final code3 = String.fromCharCodes(
-      List.generate(3, (_) => _letters.codeUnitAt(_rnd.nextInt(_letters.length)))
-    );
-    
-    final body = 'THIX-${_fixedCountryCode}-$mmyy-$random5-$code3';
-    final checksum = _checksumDigit(body);
-    return '$body-$checksum';
-  }
-
-  /// Génère un THIX ID avec un préfixe optionnel (ex: pour entreprise)
-  static String generateWithPrefix({
-    String? prefix,
-    DateTime? now,
-  }) {
-    final ts = now ?? DateTime.now();
-    final mm = ts.month.toString().padLeft(2, '0');
-    final yy = (ts.year % 100).toString().padLeft(2, '0');
-    final mmyy = '$mm$yy';
-
-    final random5 = List.generate(5, (_) => _rnd.nextInt(10)).join();
-    final code3 = String.fromCharCodes(
-      List.generate(3, (_) => _letters.codeUnitAt(_rnd.nextInt(_letters.length)))
-    );
-    
-    final prefixPart = (prefix != null && prefix.isNotEmpty) ? '-$prefix' : '';
-    final body = 'THIX-${_fixedCountryCode}$prefixPart-$mmyy-$random5-$code3';
-    final checksum = _checksumDigit(body);
-    return '$body-$checksum';
-  }
-
-  /// Génère plusieurs THIX ID d'un coup (batch)
-  static List<String> generateBatch({
-    int count = 10,
-    DateTime? now,
-  }) {
-    return List.generate(count, (_) => generate(now: now));
-  }
-
-  /// Génère des THIX ID uniques sans doublon
-  static List<String> generateUniqueBatch({
-    int count = 10,
-    DateTime? now,
-  }) {
-    final Set<String> ids = {};
-    while (ids.length < count) {
-      ids.add(generate(now: now));
-    }
-    return ids.toList();
-  }
-
-  // ==========================================================================
-  // MÉTHODES PUBLIQUES - NORMALISATION
-  // ==========================================================================
-
-  /// Retourne le code pays (toujours CD)
   static String inferCountryCode({String? selectedOrUserProvided}) {
-    return _fixedCountryCode;
+    final s = (selectedOrUserProvided ?? '').trim();
+    final mapped = _mapToIso2(s);
+    if (mapped != null) return mapped;
+    if (s.length == 2) return s.toUpperCase();
+
+    final localeCC = PlatformDispatcher.instance.locale.countryCode;
+    if (localeCC != null && localeCC.trim().length == 2) return localeCC.trim().toUpperCase();
+    return 'XX';
   }
 
-  /// Normalise une entrée utilisateur en THIX ID canonique
+  /// Normalizes user input into a canonical THIX ID string.
+  ///
+  /// Accepts minor variations seen in real usage:
+  /// - extra spaces
+  /// - missing "THIX-" prefix (e.g. "CD-..."), or partially typed "X-..."
   static String normalize(String input) {
     var v = input.trim().toUpperCase();
+    // Remove all whitespace (including newlines) and keep only safe chars.
     v = v.replaceAll(RegExp(r'\s+'), '');
     v = v.replaceAll(RegExp(r'[^A-Z0-9-]'), '');
 
-    // Corrige les préfixes partiels
-    if (v.startsWith('X-')) v = 'THI$v';
+    // Fix partial prefixes.
+    if (v.startsWith('X-')) v = 'THI$v'; // X-... -> THIX-...
     if (v.startsWith('HIX-')) v = 'T$v';
     if (v.startsWith('IX-')) v = 'TH$v';
 
-    // Ajoute le préfixe manquant
+    // Allow missing prefix.
     if (!v.startsWith('THIX-')) {
       final looksLikeThixBody = RegExp(r'^[A-Z]{2}-').hasMatch(v);
       if (looksLikeThixBody) v = 'THIX-$v';
     }
 
-    // Nettoie les tirets en double
+    // Collapse repeated dashes.
     v = v.replaceAll(RegExp(r'-{2,}'), '-');
+
+    // Common real-world paste mistakes:
+    // - trailing dash: "THIX-..-AUX-" or "THIX-..-AUX-6-"
+    // - leading dash
     v = v.replaceAll(RegExp(r'^-+'), '');
     v = v.replaceAll(RegExp(r'-+$'), '');
-    
-    // Force le code pays à CD
-    final parts = v.split('-');
-    if (parts.length >= 2 && parts[0] == 'THIX') {
-      parts[1] = _fixedCountryCode;
-      v = parts.join('-');
-    }
-    
     return v;
   }
 
-  // ==========================================================================
-  // MÉTHODES PUBLIQUES - VALIDATION
-  // ==========================================================================
+  /// Best-effort mapping for common user-entered values into ISO-3166 alpha-2.
+  ///
+  /// Key requirement: RDC must map to CD (not RD).
+  static String? _mapToIso2(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty) return null;
+    final up = v.toUpperCase();
+    if (up == 'RDC' || up == 'DRC' || up == 'RD CONGO' || up == 'R.D.C' || up == 'R.D.C.' || up == 'CONGO DRC') return 'CD';
+    if (up == 'CONGO' || up == 'REPUBLIQUE DU CONGO' || up == 'R.C' || up == 'R.C.' || up == 'ROC') return 'CG';
+    if (up == 'USA' || up == 'US' || up == 'UNITED STATES') return 'US';
+    if (up == 'FRANCE' || up == 'FR') return 'FR';
+    if (up == 'BELGIQUE' || up == 'BELGIUM' || up == 'BE') return 'BE';
 
-  /// Vérifie si un THIX ID est valide
-  static bool isValid(String thixId) {
-    final v = normalize(thixId);
-    
-    // Format actuel
-    final isCurrent = RegExp(r'^THIX-CD-\d{4}-\d{5}-[A-Z]{3}-\d$').hasMatch(v);
-    // Format legacy
-    final isLegacy = RegExp(r'^THIX-CD-[A-Z]{1,3}-\d{2}-[A-Z0-9]{4}-\d$').hasMatch(v);
-    
-    if (!isCurrent && !isLegacy) return false;
-    
-    final body = v.substring(0, v.length - 2);
-    final expected = _checksumDigit(body);
-    final got = int.tryParse(v.substring(v.length - 1)) ?? -1;
-    return expected == got;
-  }
-
-  /// Valide et retourne la raison si invalide
-  static ({bool valid, String? reason}) validateWithReason(String thixId) {
-    final v = normalize(thixId);
-    
-    if (v.length < 20) {
-      return (valid: false, reason: 'ID trop court');
+    // If user entered something like "CD - RDC" or "RDC (CD)", try to pick ISO2.
+    final isoMatch = RegExp(r'\b([A-Z]{2})\b').firstMatch(up);
+    if (isoMatch != null) {
+      final iso = isoMatch.group(1);
+      if (iso != null && iso.length == 2) return iso;
     }
-    
-    if (!v.startsWith('THIX-')) {
-      return (valid: false, reason: 'Doit commencer par THIX-');
-    }
-    
-    if (!v.contains('-CD-')) {
-      return (valid: false, reason: 'Le pays doit être CD (République Démocratique du Congo)');
-    }
-    
-    final isCurrent = RegExp(r'^THIX-CD-\d{4}-\d{5}-[A-Z]{3}-\d$').hasMatch(v);
-    final isLegacy = RegExp(r'^THIX-CD-[A-Z]{1,3}-\d{2}-[A-Z0-9]{4}-\d$').hasMatch(v);
-    
-    if (!isCurrent && !isLegacy) {
-      return (valid: false, reason: 'Format invalide');
-    }
-    
-    final body = v.substring(0, v.length - 2);
-    final expected = _checksumDigit(body);
-    final got = int.tryParse(v.substring(v.length - 1)) ?? -1;
-    
-    if (expected != got) {
-      return (valid: false, reason: 'Somme de contrôle invalide (attendu: $expected, reçu: $got)');
-    }
-    
-    return (valid: true, reason: null);
-  }
-
-  // ==========================================================================
-  // MÉTHODES PUBLIQUES - EXTRACTION D'INFORMATIONS
-  // ==========================================================================
-
-  /// Extrait les informations d'un THIX ID valide
-  static Map<String, String>? extractInfo(String thixId) {
-    if (!isValid(thixId)) return null;
-    
-    final normalized = normalize(thixId);
-    final parts = normalized.split('-');
-    
-    // Format actuel (6 parties)
-    if (parts.length >= 6 && RegExp(r'^\d{4}$').hasMatch(parts[2])) {
-      return {
-        'prefix': parts[0],      // THIX
-        'country': parts[1],     // CD
-        'date': parts[2],        // MMYY
-        'random': parts[3],      // 5 chiffres
-        'code': parts[4],        // 3 lettres
-        'checksum': parts[5],    // 1 chiffre
-      };
-    }
-    
-    // Format legacy
-    if (parts.length >= 6) {
-      return {
-        'prefix': parts[0],      // THIX
-        'country': parts[1],     // CD
-        'initials': parts[2],    // Initiales (1-3 lettres)
-        'year': parts[3],        // YY (2 chiffres)
-        'token': parts[4],       // 4 caractères
-        'checksum': parts[5],    // 1 chiffre
-      };
-    }
-    
     return null;
   }
 
-  /// Extrait la date approximative (mois/année) du THIX ID
-  static DateTime? extractDate(String thixId) {
-    final info = extractInfo(thixId);
-    if (info == null) return null;
-    
-    // Format actuel
-    final dateStr = info['date'];
-    if (dateStr != null && dateStr.length == 4) {
-      final month = int.tryParse(dateStr.substring(0, 2));
-      final year = int.tryParse('20${dateStr.substring(2, 4)}');
-      if (month != null && year != null && month >= 1 && month <= 12) {
-        return DateTime(year, month);
-      }
-    }
-    
-    // Format legacy (seulement l'année)
-    final yearStr = info['year'];
-    if (yearStr != null && yearStr.length == 2) {
-      final year = int.tryParse('20$yearStr');
-      if (year != null) {
-        return DateTime(year);
-      }
-    }
-    
-    return null;
+  /// Generates the recommended/current THIX ID.
+  static String generate({required String countryCode, DateTime? now}) {
+    final ts = now ?? DateTime.now();
+    final mm = ts.month.toString().padLeft(2, '0');
+    final yy = (ts.year % 100).toString().padLeft(2, '0');
+    final mmyy = '$mm$yy';
+
+    final random5 = List.generate(5, (_) => _rnd.nextInt(10)).join();
+    final code3 = String.fromCharCodes(List.generate(3, (_) => _letters.codeUnitAt(_rnd.nextInt(_letters.length))));
+    final body = 'THIX-${countryCode.toUpperCase()}-$mmyy-$random5-$code3';
+    final c = checksumDigit(body);
+    return '$body-$c';
   }
 
-  // ==========================================================================
-  // MÉTHODES PUBLIQUES - FORMATAGE
-  // ==========================================================================
+  /// Backward-compatible API: previously generated a different “V2” format.
+  ///
+  /// As requested, we now generate the **recommended/current** format:
+  /// `THIX-[CC]-[MMYY]-[RANDOM5]-[CODE3]-[CHECK]`.
+  ///
+  /// The [displayName] argument is kept for compatibility with existing calls.
+  static String generateV2({required String countryCode, required String displayName, DateTime? now}) => generate(countryCode: countryCode, now: now);
 
-  /// Masque le THIX ID pour affichage (ex: THIX-CD-****-*****-***-*)
-  static String mask(String thixId, {bool showLast = false}) {
-    if (!isValid(thixId)) return thixId;
-    
-    final parts = normalize(thixId).split('-');
-    if (parts.length >= 6) {
-      if (showLast) {
-        return '${parts[0]}-${parts[1]}-****-*****-${parts[4]}-${parts[5]}';
-      }
-      return '${parts[0]}-${parts[1]}-****-*****-***-*';
-    }
-    return thixId;
-  }
-
-  /// Formatage élégant pour UI
-  static String toDisplayString(String thixId) {
-    final normalized = normalize(thixId);
-    final parts = normalized.split('-');
-    if (parts.length >= 4) {
-      return '${parts[0]}-${parts[1]}-${parts[2]}-${parts[3]}...';
-    }
-    return normalized;
-  }
-
-  // ==========================================================================
-  // MÉTHODES PUBLIQUES - COMPARAISON
-  // ==========================================================================
-
-  /// Compare deux THIX ID par date de création
-  static int compareByDate(String a, String b) {
-    final dateA = extractDate(a);
-    final dateB = extractDate(b);
-    if (dateA == null && dateB == null) return 0;
-    if (dateA == null) return 1;
-    if (dateB == null) return -1;
-    return dateB.compareTo(dateA);
-  }
-
-  /// Vérifie si un ID est plus récent qu'un autre
-  static bool isNewerThan(String thixId, String other) {
-    return compareByDate(thixId, other) < 0;
-  }
-
-  // ==========================================================================
-  // MÉTHODES PUBLIQUES - STATISTIQUES
-  // ==========================================================================
-
-  /// Statistiques sur une liste de THIX ID
-  static Map<String, dynamic> getStatistics(List<String> ids) {
-    final valid = ids.where((id) => isValid(id)).length;
-    final invalid = ids.length - valid;
-    final unique = ids.toSet().length;
-    
-    final years = <String>[];
-    for (final id in ids) {
-      final date = extractDate(id);
-      if (date != null) {
-        years.add(date.year.toString());
-      }
-    }
-    
-    final yearCount = <String, int>{};
-    for (final year in years) {
-      yearCount[year] = (yearCount[year] ?? 0) + 1;
-    }
-    
-    return {
-      'total': ids.length,
-      'valid': valid,
-      'invalid': invalid,
-      'unique': unique,
-      'duplicates': ids.length - unique,
-      'years': yearCount,
-    };
-  }
-
-  // ==========================================================================
-  // MÉTHODES PRIVÉES
-  // ==========================================================================
-
-  /// Calcule le checksum (chiffre de contrôle)
-  static int _checksumDigit(String input) {
+  /// Computes an anti-fraud checksum digit (0-9) using a Luhn-like mod10.
+  ///
+  /// We map alphanumerics into a digit stream, then run Luhn.
+  static int checksumDigit(String input) {
     final cleaned = input.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
     final digits = <int>[];
     for (final r in cleaned.runes) {
       final ch = String.fromCharCode(r);
       final v = _charValue(ch);
+      // Expand value into base-10 digits to keep Luhn stable.
       if (v >= 10) {
         digits.add(v ~/ 10);
         digits.add(v % 10);
@@ -356,18 +136,43 @@ class ThixIdService {
         digits.add(v);
       }
     }
-    return _luhnCheckDigit(digits);
+    final check = _luhnCheckDigit(digits);
+    return check;
   }
 
-  /// Convertit un caractère en valeur numérique
+  static bool isValid(String thixId) {
+    final v = normalize(thixId);
+    // Current/recommended.
+    final isCurrent = RegExp(r'^THIX-[A-Z]{2}-\d{4}-\d{5}-[A-Z]{3}-\d$').hasMatch(v);
+    // Legacy.
+    final isLegacy = RegExp(r'^THIX-[A-Z]{2}-[A-Z]{1,3}-\d{2}-[A-Z0-9]{4}-\d$').hasMatch(v);
+    if (!isCurrent && !isLegacy) return false;
+    final body = v.substring(0, v.length - 2); // strip -C
+    final expected = checksumDigit(body);
+    final got = int.tryParse(v.substring(v.length - 1)) ?? -1;
+    return expected == got;
+  }
+
+  static String _initials(String displayName) {
+    final cleaned = displayName.trim().toUpperCase();
+    if (cleaned.isEmpty) return 'USR';
+    final parts = cleaned.split(RegExp(r'[^A-Z]+')).where((p) => p.isNotEmpty).toList(growable: false);
+    if (parts.isEmpty) return 'USR';
+    final buf = StringBuffer();
+    for (final p in parts.take(3)) {
+      buf.write(p[0]);
+    }
+    final out = buf.toString();
+    return out.isEmpty ? 'USR' : out;
+  }
+
   static int _charValue(String ch) {
     final c = ch.codeUnitAt(0);
-    if (c >= 48 && c <= 57) return c - 48;      // 0-9
-    if (c >= 65 && c <= 90) return 10 + (c - 65); // A-Z → 10-35
+    if (c >= 48 && c <= 57) return c - 48;
+    if (c >= 65 && c <= 90) return 10 + (c - 65);
     return 0;
   }
 
-  /// Algorithme de Luhn modifié
   static int _luhnCheckDigit(List<int> digits) {
     var sum = 0;
     var alt = true;
@@ -383,39 +188,48 @@ class ThixIdService {
     return (10 - (sum % 10)) % 10;
   }
 
-  /// Tente de corriger un THIX ID mal saisi
+  /// Attempts to transform a user-entered string into a **valid** THIX ID by
+  /// fixing common mistakes around the checksum.
+  ///
+  /// This is intentionally conservative:
+  /// - If the structure doesn't look like a THIX ID, returns null.
+  /// - If it looks like a THIX ID but checksum is wrong/missing, we recompute it.
+  ///
+  /// Example:
+  /// - Input:  `THIX-CD-0426-48392-NJK-9`  -> Output: `THIX-CD-0426-48392-NJK-7`
+  /// - Input:  `THIX-CD-0426-48392-NJK`    -> Output: `THIX-CD-0426-48392-NJK-7`
   static String? canonicalizeOrNull(String input) {
     final v = normalize(input);
 
-    // Format actuel sans checksum
-    final currentNoCheck = RegExp(r'^THIX-CD-\d{4}-\d{5}-[A-Z]{3}$');
+    // Current format without checksum.
+    final currentNoCheck = RegExp(r'^THIX-[A-Z]{2}-\d{4}-\d{5}-[A-Z]{3}$');
     if (currentNoCheck.hasMatch(v)) {
-      final c = _checksumDigit(v);
+      final c = checksumDigit(v);
       return '$v-$c';
     }
 
-    // Format actuel avec checksum (peut-être faux)
-    final currentMaybe = RegExp(r'^(THIX-CD-\d{4}-\d{5}-[A-Z]{3})-(\d)$');
+    // Current format with checksum (possibly wrong).
+    final currentMaybe = RegExp(r'^(THIX-[A-Z]{2}-\d{4}-\d{5}-[A-Z]{3})-(\d)$');
     final m1 = currentMaybe.firstMatch(v);
     if (m1 != null) {
       final body = m1.group(1)!;
-      final c = _checksumDigit(body);
+      final c = checksumDigit(body);
       return '$body-$c';
     }
 
-    // Format legacy sans checksum
-    final legacyNoCheck = RegExp(r'^THIX-CD-[A-Z]{1,3}-\d{2}-[A-Z0-9]{4}$');
+    // Legacy format without checksum.
+    final legacyNoCheck = RegExp(r'^THIX-[A-Z]{2}-[A-Z]{1,3}-\d{2}-[A-Z0-9]{4}$');
     if (legacyNoCheck.hasMatch(v)) {
-      final c = _checksumDigit(v);
+      final c = checksumDigit(v);
       return '$v-$c';
     }
 
-    // Format legacy avec checksum (peut-être faux)
-    final legacyMaybe = RegExp(r'^(THIX-CD-[A-Z]{1,3}-\d{2}-[A-Z0-9]{4})-(\d)$');
+    // Legacy format with checksum (possibly wrong).
+    final legacyMaybe = RegExp(r'^(THIX-[A-Z]{2}-[A-Z]{1,3}-\d{2}-[A-Z0-9]{4})-(\d)$');
     final m2 = legacyMaybe.firstMatch(v);
     if (m2 != null) {
       final body = m2.group(1)!;
-      final c = _checksumDigit(body);
+      final c = checksumDigit(body);
       return '$body-$c';
     }
 

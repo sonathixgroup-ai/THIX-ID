@@ -15,36 +15,42 @@ class DocumentService {
   /// download_url (text), storage_path (text), expires_at (timestamptz),
   /// created_at (timestamptz), updated_at (timestamptz)
   static const String table = 'documents';
-  static const String bucket = 'this-documents'; // ← CORRIGÉ : this-documents au lieu de thix-documents
+  static const String bucket = 'thix-documents';
 
   /// Thrown when the target Supabase Storage bucket does not exist.
+  ///
+  /// This typically happens when migrations/setup were not applied on the
+  /// connected Supabase project.
   static bool isBucketNotFound(Object e) {
     if (e is! StorageException) return false;
-    final msg = e.message.toLowerCase();
+    final msg = (e.message).toLowerCase();
     return e.statusCode == 404 && msg.contains('bucket') && msg.contains('not found');
   }
 
   /// Generates a download URL for a stored object.
-  Future<String> createDownloadUrl({
-    required String storagePath,
-    Duration expiresIn = const Duration(minutes: 20),
-    String bucketName = bucket,
-  }) async {
+  ///
+  /// Why: many Supabase Storage buckets are **private** with RLS, so a public URL
+  /// will open but return 403. A signed URL works for both private and public
+  /// buckets.
+  Future<String> createDownloadUrl({required String storagePath, Duration expiresIn = const Duration(minutes: 20), String bucketName = bucket}) async {
     final path = storagePath.trim();
     if (path.isEmpty) throw Exception('storagePath vide.');
     try {
       final seconds = expiresIn.inSeconds.clamp(60, 60 * 60 * 24);
       return await _client.storage.from(bucketName).createSignedUrl(path, seconds);
     } on StorageException catch (e) {
-      debugPrint('DocumentService: createSignedUrl failed bucket=$bucketName path=$path err=${e.message}');
+      debugPrint('DocumentService: createSignedUrl failed path=$path err=${e.message}');
+      // Fallback: public URL (works if bucket is public).
       return _client.storage.from(bucketName).getPublicUrl(path);
     } catch (e) {
-      debugPrint('DocumentService: createSignedUrl unexpected error bucket=$bucketName path=$path err=$e');
-      return _client.storage.from(bucketName).getPublicUrl(path);
+      debugPrint('DocumentService: createDownloadUrl failed path=$path err=$e');
+      rethrow;
     }
   }
 
   /// Uploads a picked file to a given Supabase Storage bucket.
+  ///
+  /// Returns the uploaded object path.
   Future<String> uploadPickedFileToBucket({
     required String bucketName,
     required String uid,
@@ -64,51 +70,46 @@ class DocumentService {
         if (bytes == null) throw Exception('Impossible de lire le fichier (bytes null).');
         return await storage.uploadBinary(path, bytes, fileOptions: FileOptions(upsert: upsert, contentType: contentType));
       }
+
       final p = file.path;
       if (p == null) throw Exception('Chemin fichier invalide.');
       return await storage.upload(path, fileFromPath(p) as dynamic, fileOptions: FileOptions(upsert: upsert, contentType: contentType));
     } on StorageException catch (e) {
-      debugPrint('DocumentService: uploadPickedFileToBucket failed bucket=$safeBucket uid=$uid path=$objectPath err=${e.message}');
+      debugPrint('DocumentService: uploadPickedFileToBucket failed bucket=$bucketName uid=$uid path=$objectPath err=${e.message}');
       rethrow;
     } catch (e) {
-      debugPrint('DocumentService: uploadPickedFileToBucket failed bucket=$safeBucket uid=$uid path=$objectPath err=$e');
+      debugPrint('DocumentService: uploadPickedFileToBucket failed bucket=$bucketName uid=$uid path=$objectPath err=$e');
       rethrow;
     }
   }
 
-  /// Resolves download URL from a row (prefers signed URL).
+  /// Prefers `storage_path` (signed URL) and falls back to `download_url`.
   Future<String> resolveRowDownloadUrl(Map<String, dynamic> row) async {
     final storagePath = (row['storage_path'] ?? row['storagePath'])?.toString() ?? '';
-    if (storagePath.trim().isNotEmpty) {
-      return createDownloadUrl(storagePath: storagePath);
-    }
+    if (storagePath.trim().isNotEmpty) return createDownloadUrl(storagePath: storagePath);
     return (row['download_url'] ?? row['downloadUrl'])?.toString() ?? '';
   }
 
-  /// Stream of documents for a user (polling every 3 seconds).
-  Stream<List<Map<String, dynamic>>> streamDocuments(String uid) {
-    return Stream.periodic(const Duration(seconds: 3), (_) => null)
-        .asyncMap((_) => _fetchDocuments(uid));
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchDocuments(String uid) async {
-    try {
-      final rows = await _client
-          .from(table)
-          .select('*')
-          .eq('user_id', uid)
-          .order('created_at', ascending: false)
-          .limit(200);
-      return rows is List
-          ? rows.map((e) => (e as Map).cast<String, dynamic>()).toList(growable: false)
-          : [];
-    } catch (e) {
-      debugPrint('DocumentService: fetchDocuments failed uid=$uid err=$e');
-      return [];
+  Stream<List<Map<String, dynamic>>> streamDocuments(String uid) async* {
+    while (true) {
+      try {
+        final rows = await _client.from(table).select('*').eq('user_id', uid).order('created_at', ascending: false).limit(200);
+        if (rows is List) {
+          yield rows.map((e) => (e as Map).cast<String, dynamic>()).toList(growable: false);
+        } else {
+          yield const <Map<String, dynamic>>[];
+        }
+      } catch (e) {
+        debugPrint('DocumentService: streamDocuments poll failed uid=$uid err=$e');
+        yield const <Map<String, dynamic>>[];
+      }
+      await Future<void>.delayed(const Duration(seconds: 3));
     }
   }
 
   /// Uploads a file to the default documents bucket and inserts a metadata row.
+  ///
+  /// Returns the uploaded Storage object path.
   Future<String> uploadPickedFile({
     required String uid,
     required String docId,
@@ -143,6 +144,8 @@ class DocumentService {
         uploadedPath = await storage.upload(storagePath, fileFromPath(path) as dynamic, fileOptions: FileOptions(upsert: true, contentType: contentType));
       }
 
+      // Note: even if the bucket is private, storing a public URL is harmless
+      // (it will just 403). UI will prefer signed URLs from `storage_path`.
       final url = storage.getPublicUrl(uploadedPath);
       await _client.from(table).insert({
         'user_id': uid,
@@ -150,7 +153,7 @@ class DocumentService {
         'doc_type': (docType ?? '').trim().isEmpty ? null : docType!.trim(),
         'expires_at': expiresAt?.toUtc().toIso8601String(),
         'title': safeTitle,
-        'status': 'uploaded',
+        'status': 'pending',
         'file_name': file.name,
         'mime_type': contentType,
         'size_bytes': file.size,
@@ -166,62 +169,30 @@ class DocumentService {
     }
   }
 
-  /// Updates the status of a document.
-  Future<void> updateDocumentStatus({
-    required String uid,
-    required String documentId,
-    required String status,
-  }) async {
-    try {
-      await _client.from(table).update({
-        'status': status,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', documentId).eq('user_id', uid);
-    } catch (e) {
-      debugPrint('DocumentService: updateStatus failed uid=$uid doc=$documentId err=$e');
-      rethrow;
-    }
-  }
-
   static String _contentTypeForFile(PlatformFile file) {
     final ext = (file.extension ?? '').trim().toLowerCase();
-    switch (ext) {
-      case 'pdf':
-        return 'application/pdf';
-      case 'png':
-        return 'image/png';
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'webp':
-        return 'image/webp';
-      default:
-        return 'application/octet-stream';
-    }
+    return switch (ext) {
+      'pdf' => 'application/pdf',
+      'png' => 'image/png',
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'webp' => 'image/webp',
+      _ => 'application/octet-stream',
+    };
   }
 
-  /// Deletes a document by its ID.
-  Future<void> deleteDocument({
-    required String uid,
-    required String documentId,
-    String? storagePath,
-  }) async {
+  Future<void> deleteDocument({required String uid, required String docDocId, String? storagePath}) async {
     try {
-      await _client.from(table).delete().eq('id', documentId).eq('user_id', uid);
+      await _client.from(table).delete().eq('id', docDocId).eq('user_id', uid);
       if (storagePath != null && storagePath.trim().isNotEmpty) {
         await _client.storage.from(bucket).remove([storagePath]);
       }
     } catch (e) {
-      debugPrint('DocumentService: delete failed uid=$uid doc=$documentId err=$e');
+      debugPrint('DocumentService: delete failed uid=$uid doc=$docDocId err=$e');
       rethrow;
     }
   }
 
-  /// Fetches the latest document row by doc_id.
-  Future<Map<String, dynamic>?> fetchLatestDocumentRowByDocId({
-    required String uid,
-    required String docId,
-  }) async {
+  Future<Map<String, dynamic>?> fetchLatestDocumentRowByDocId({required String uid, required String docId}) async {
     final normalized = docId.trim().toUpperCase();
     if (normalized.isEmpty) return null;
     try {
@@ -241,29 +212,21 @@ class DocumentService {
     }
   }
 
-  /// Deletes the latest document by doc_id.
-  Future<void> deleteLatestDocumentByDocId({
-    required String uid,
-    required String docId,
-  }) async {
+  Future<void> deleteLatestDocumentByDocId({required String uid, required String docId}) async {
     try {
       final row = await fetchLatestDocumentRowByDocId(uid: uid, docId: docId);
       if (row == null) return;
       final id = (row['id'] ?? '').toString();
       final storagePath = (row['storage_path'] ?? row['storagePath'])?.toString();
       if (id.trim().isEmpty) return;
-      await deleteDocument(uid: uid, documentId: id, storagePath: storagePath);
+      await deleteDocument(uid: uid, docDocId: id, storagePath: storagePath);
     } catch (e) {
       debugPrint('DocumentService: deleteLatestDocumentByDocId failed uid=$uid docId=$docId err=$e');
       rethrow;
     }
   }
 
-  /// Deletes an object directly from a Storage bucket.
-  Future<void> deleteObjectFromBucket({
-    required String bucketName,
-    required String storagePath,
-  }) async {
+  Future<void> deleteObjectFromBucket({required String bucketName, required String storagePath}) async {
     final b = bucketName.trim();
     final p = storagePath.trim();
     if (b.isEmpty || p.isEmpty) return;
