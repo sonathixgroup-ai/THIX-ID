@@ -1,1 +1,2 @@
-# THIX-ID
+# app.thixid
+Une identitE securiser
