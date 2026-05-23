@@ -6,16 +6,9 @@ import 'package:thix_id/presentation/admin/pages/admin_overview_page.dart';
 import 'package:thix_id/presentation/admin/pages/admin_jobs_opportunities_page.dart';
 import 'package:thix_id/presentation/admin/pages/admin_news_page.dart';
 import 'package:thix_id/presentation/admin/pages/admin_placeholder_page.dart';
-import 'package:thix_id/presentation/admin/pages/admin_sos_emergency_page.dart';
 import 'package:thix_id/presentation/admin/pages/admin_user_management_page.dart';
 import 'package:thix_id/presentation/admin/pages/admin_verification_page.dart';
-import 'package:thix_id/presentation/admin/pages/admin_events_page.dart';
-import 'package:thix_id/presentation/admin/pages/admin_trainings_page.dart';
-import 'package:thix_id/presentation/admin/pages/admin_audit_activity_page.dart';
-import 'package:thix_id/presentation/admin/pages/admin_access_requests_page.dart';
 import 'package:thix_id/services/admin_rbac_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:thix_id/supabase/supabase_config.dart';
 
 class AdminPage extends StatefulWidget {
   final AdminModule module;
@@ -31,44 +24,10 @@ class _AdminPageState extends State<AdminPage> {
   String? _role;
   bool _loading = true;
 
-  RealtimeChannel? _roleChannel;
-
   @override
   void initState() {
     super.initState();
     _loadRole();
-    _subscribeRoleRealtime();
-  }
-
-  void _subscribeRoleRealtime() {
-    // If the membership row changes, refresh role live.
-    final uid = SupabaseConfig.client.auth.currentUser?.id;
-    if (uid == null || uid.trim().isEmpty) return;
-    try {
-      _roleChannel = SupabaseConfig.client.channel('admin:rbac:$uid');
-      _roleChannel!
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: AdminRbacService.table,
-            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'user_id', value: uid),
-            callback: (_) {
-              // Avoid setState storms; just reload.
-              _loadRole();
-            },
-          )
-          .subscribe();
-    } catch (e) {
-      debugPrint('AdminPage: role realtime subscribe failed err=$e');
-    }
-  }
-
-  @override
-  void dispose() {
-    try {
-      if (_roleChannel != null) SupabaseConfig.client.removeChannel(_roleChannel!);
-    } catch (_) {}
-    super.dispose();
   }
 
   @override
@@ -123,16 +82,10 @@ class _AdminPageState extends State<AdminPage> {
     switch (module) {
       case AdminModule.overview:
         return const AdminOverviewPage();
-      case AdminModule.accessRequests:
-        return const AdminAccessRequestsPage();
       case AdminModule.users:
         return const AdminUserManagementPage();
       case AdminModule.verification:
         return const AdminVerificationPage();
-      case AdminModule.events:
-        return const AdminEventsPage();
-      case AdminModule.trainings:
-        return const AdminTrainingsPage();
       case AdminModule.uid:
         return const AdminPlaceholderPage(
           title: 'THIX UID Management',
@@ -150,7 +103,11 @@ class _AdminPageState extends State<AdminPage> {
           icon: Icons.forum_rounded,
         );
       case AdminModule.sos:
-        return const AdminSosEmergencyPage();
+        return const AdminPlaceholderPage(
+          title: 'SOS Emergency Center',
+          description: 'Live emergency alerts, geolocation dashboard, audio monitoring workflows, risk heatmaps.',
+          icon: Icons.sos_rounded,
+        );
       case AdminModule.institutions:
         return const AdminPlaceholderPage(
           title: 'University & Institution Panel',
@@ -182,7 +139,11 @@ class _AdminPageState extends State<AdminPage> {
           icon: Icons.tune_rounded,
         );
       case AdminModule.audit:
-        return const AdminAuditActivityPage();
+        return const AdminPlaceholderPage(
+          title: 'Audit & Activity Logs',
+          description: 'Admin actions, access history, session/device inventory, exportable audit trails.',
+          icon: Icons.manage_history_rounded,
+        );
     }
   }
 }

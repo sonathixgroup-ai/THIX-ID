@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import 'package:thix_id/auth/auth_controller.dart';
 import 'package:thix_id/nav.dart';
 import 'package:thix_id/presentation/admin/admin_routes.dart';
-import 'package:thix_id/services/admin_rbac_service.dart';
 import 'package:thix_id/theme.dart';
 
 /// Responsive Admin layout (web-first): sidebar + topbar + content.
@@ -347,7 +346,6 @@ class _AdminNavList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSuperAdmin = AdminRbacService.roleLevel(role ?? '') >= AdminRbacService.roleLevel('super_admin');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -382,11 +380,8 @@ class _AdminNavList extends StatelessWidget {
           child: ListView(
             children: [
               _NavItem(module: module, target: AdminModule.overview, icon: Icons.dashboard_rounded, label: 'Global Overview'),
-              _NavItem(module: module, target: AdminModule.accessRequests, icon: Icons.admin_panel_settings_rounded, label: 'Account Access Requests'),
               _NavItem(module: module, target: AdminModule.users, icon: Icons.people_alt_rounded, label: 'User Management'),
               _NavItem(module: module, target: AdminModule.verification, icon: Icons.verified_user_rounded, label: 'Verification Center'),
-              _NavItem(module: module, target: AdminModule.events, icon: Icons.event_available_rounded, label: 'Events'),
-              _NavItem(module: module, target: AdminModule.trainings, icon: Icons.school_rounded, label: 'Trainings'),
               _NavItem(module: module, target: AdminModule.uid, icon: Icons.badge_rounded, label: 'THIX UID'),
               _NavItem(module: module, target: AdminModule.jobs, icon: Icons.work_rounded, label: 'Jobs & Opportunities'),
               _NavItem(module: module, target: AdminModule.news, icon: Icons.campaign_rounded, label: 'Info / News'),
@@ -394,11 +389,11 @@ class _AdminNavList extends StatelessWidget {
               _NavItem(module: module, target: AdminModule.sos, icon: Icons.sos_rounded, label: 'SOS Emergency'),
               _NavItem(module: module, target: AdminModule.institutions, icon: Icons.account_balance_rounded, label: 'Institutions'),
               _NavItem(module: module, target: AdminModule.analytics, icon: Icons.query_stats_rounded, label: 'Analytics'),
-              if (isSuperAdmin) _NavItem(module: module, target: AdminModule.cybersecurity, icon: Icons.shield_rounded, label: 'Cybersecurity'),
-              if (isSuperAdmin) _NavItem(module: module, target: AdminModule.api, icon: Icons.api_rounded, label: 'API & Integrations'),
+              _NavItem(module: module, target: AdminModule.cybersecurity, icon: Icons.shield_rounded, label: 'Cybersecurity'),
+              _NavItem(module: module, target: AdminModule.api, icon: Icons.api_rounded, label: 'API & Integrations'),
               const SizedBox(height: 8),
               _NavItem(module: module, target: AdminModule.audit, icon: Icons.manage_history_rounded, label: 'Audit & Activity'),
-              if (isSuperAdmin) _NavItem(module: module, target: AdminModule.settings, icon: Icons.tune_rounded, label: 'Settings'),
+              _NavItem(module: module, target: AdminModule.settings, icon: Icons.tune_rounded, label: 'Settings'),
             ],
           ),
         ),
