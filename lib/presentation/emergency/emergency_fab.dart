@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:thix_id/auth/auth_controller.dart';
-import 'package:thix_id/l10n/app_localizations.dart';
 import 'package:thix_id/nav.dart';
 import 'package:thix_id/presentation/emergency/emergency_overlay.dart';
 import 'package:thix_id/theme.dart';
@@ -70,7 +69,7 @@ class _EmergencyFabState extends State<EmergencyFab> with SingleTickerProviderSt
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () => context.pop(false),
-                            child: Text(context.loc.t('later')),
+                            child: const Text('Plus tard'),
                           ),
                         ),
                         const SizedBox(width: AppSpacing.md),
@@ -78,7 +77,7 @@ class _EmergencyFabState extends State<EmergencyFab> with SingleTickerProviderSt
                           child: FilledButton.icon(
                             onPressed: () => context.pop(true),
                             icon: const Icon(Icons.login_rounded, color: Colors.white),
-                            label: Text(context.loc.t('login'), style: const TextStyle(color: Colors.white)),
+                            label: const Text('Se connecter', style: TextStyle(color: Colors.white)),
                           ),
                         ),
                       ],
