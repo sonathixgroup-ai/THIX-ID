@@ -1,472 +1,337 @@
-// ============================================================================
-// FICHIER: lib/nav.dart
-// Routes et navigation pour THIX ID
-// ============================================================================
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:thix_id/auth/auth_controller.dart';
 import 'package:thix_id/models/app_user.dart';
 
-// ============================================================================
-// IMPORTS DES PAGES
-// ============================================================================
+// Import all screens
 import 'presentation/home/home_page.dart';
 import 'presentation/auth/login_page.dart';
 import 'presentation/auth/personal_registration_page.dart';
 import 'presentation/auth/enterprise_registration_page.dart';
-import 'presentation/dashboard/user_dashboard_page.dart';
-import 'presentation/enterprise/enterprise_dashboard_page.dart';
-import 'presentation/events/events_page.dart';
-import 'presentation/events/event_details_page.dart';
-import 'presentation/events/event_register_page.dart';
-import 'presentation/events/event_ticket_page.dart';
-import 'presentation/events/user_event_dashboard_page.dart';
-import 'presentation/profile/public_profile_page.dart';
 import 'presentation/payment/payment_gateway_page.dart';
 import 'presentation/payment/activation_receipt_page.dart';
+import 'presentation/profile/public_profile_page.dart';
+import 'presentation/dashboard/user_dashboard_page.dart';
+import 'presentation/enterprise/enterprise_dashboard_page.dart';
 import 'presentation/chat/thix_chat_page.dart';
 import 'presentation/vault/document_vault_page.dart';
 import 'presentation/settings/settings_page.dart';
 import 'presentation/network/network_page.dart';
 import 'presentation/jobs/jobs_page.dart';
-import 'presentation/opportunities/opportunities_page.dart';
+import 'package:thix_id/presentation/jobs/job_apply_page.dart';
+import 'package:thix_id/presentation/jobs/job_details_page.dart';
+import 'package:thix_id/presentation/opportunities/opportunities_page.dart';
+import 'package:thix_id/presentation/opportunities/opportunity_apply_page.dart';
+import 'package:thix_id/presentation/opportunities/opportunity_details_page.dart';
+import 'presentation/events/events_page.dart';
+import 'package:thix_id/presentation/events/event_details_page.dart';
+import 'package:thix_id/presentation/events/event_register_page.dart';
+import 'package:thix_id/presentation/events/event_ticket_page.dart';
 import 'presentation/education/education_page.dart';
-import 'presentation/training/training_home_page.dart';
-import 'presentation/training/training_details_page.dart';
-import 'presentation/training/learning_dashboard_page.dart';
-import 'presentation/training/lesson_player_page.dart';
-import 'presentation/thix_market/thix_market_page.dart';
-import 'presentation/thix_sante/thix_sante_page.dart';
-import 'presentation/thix_reservation/thix_reservation_page.dart';
-import 'presentation/thix_money/thix_money_page.dart';
-import 'presentation/thix_incubator/incubator_page.dart';
+import 'package:thix_id/presentation/admin/admin_page.dart';
+import 'package:thix_id/presentation/admin/admin_routes.dart';
 
-// ============================================================================
-// CONSTANTES DES ROUTES
-// ============================================================================
-class AppRoutes {
-  // Routes principales
-  static const String home = '/';
-  static const String login = '/login';
-  static const String personalReg = '/personal-reg';
-  static const String enterpriseReg = '/enterprise-reg';
-  static const String enterprise = '/enterprise';
-  
-  // Paiement & Activation
-  static const String payment = '/payment';
-  static const String activationReceipt = '/activation-receipt';
-  
-  // Profil & Dashboard
-  static const String publicProfile = '/public-profile';
-  static const String userDashboard = '/user-dashboard';
-  static const String enterpriseDashboard = '/enterprise-dashboard';
-  
-  // Enterprise Portal
-  static const String enterprisePortalBasePath = '/company';
-  static String enterprisePortalBase(String slug) => '${enterprisePortalBasePath}/$slug';
-  static String enterprisePortalDashboard(String slug, String section) => '/company/$slug/dashboard/$section';
-  
-  // Services THIX
-  static const String chat = '/chat';
-  static const String vault = '/vault';
-  static const String settings = '/settings';
-  static const String network = '/network';
-  
-  // Emplois & Opportunités
-  static const String jobs = '/jobs';
-  static const String jobDashboard = '/jobs/dashboard';
-  static const String recruiter = '/recruiter';
-  static const String opportunities = '/opportunities';
-  
-  // Événements
-  static const String events = '/events';
-  static const String userEventsDashboard = '/events/me';
-  
-  // Éducation & Formation
-  static const String education = '/education';
-  static const String trainingHome = '/training';
-  static const String trainingDetailsBasePath = '/training-details';
-  static const String learningDashboard = '/learn';
-  static const String lessonPlayer = '/learn/player';
-  
-  // Admin
-  static const String admin = '/admin';
-  
-  // Services THIX (supplémentaires)
-  static const String thixMarket = '/market';
-  static const String thixSante = '/sante';
-  static const String reservation = '/reservation';
-  static const String thixMoney = '/thix-money';
-  static const String incubator = '/incubator';
-}
-
-// ============================================================================
-// EXTENSION DE NAVIGATION
-// ============================================================================
-extension GoRouterNavigation on BuildContext {
-  void go(String location, {Object? extra}) {
-    GoRouter.of(this).go(location, extra: extra);
-  }
-
-  void goNamed(String name, {Map<String, String>? pathParameters, Object? extra}) {
-    GoRouter.of(this).goNamed(name, pathParameters: pathParameters, extra: extra);
-  }
-
-  void push(String location, {Object? extra}) {
-    GoRouter.of(this).push(location, extra: extra);
-  }
-
-  void pushNamed(String name, {Map<String, String>? pathParameters, Object? extra}) {
-    GoRouter.of(this).pushNamed(name, pathParameters: pathParameters, extra: extra);
-  }
-
-  void pop() {
-    GoRouter.of(this).pop();
-  }
-
-  void popOrGo(String fallbackLocation) {
-    final router = GoRouter.of(this);
-    if (router.canPop()) {
-      router.pop();
-    } else {
-      router.go(fallbackLocation);
-    }
-  }
-}
-
-// ============================================================================
-// HELPER POUR LES ROUTES AVEC PARAMÈTRES
-// ============================================================================
-class RouteHelper {
-  // Événements
-  static String eventDetails(String eventId, {bool registered = false}) {
-    return '/events/$eventId${registered ? '?registered=1' : ''}';
-  }
-
-  static String eventRegister(String eventId) {
-    return '/events/$eventId/register';
-  }
-
-  static String eventTicket(String eventId, String registrationId) {
-    return '/events/$eventId/ticket/$registrationId';
-  }
-
-  // Emplois
-  static String jobDetails(String jobId, {bool applied = false}) {
-    return '/jobs/$jobId${applied ? '?applied=1' : ''}';
-  }
-
-  static String jobApply(String jobId) {
-    return '/jobs/$jobId/apply';
-  }
-
-  // Opportunités
-  static String opportunityDetails(String opportunityId, {bool applied = false}) {
-    return '/opportunities/$opportunityId${applied ? '?applied=1' : ''}';
-  }
-
-  static String opportunityApply(String opportunityId) {
-    return '/opportunities/$opportunityId/apply';
-  }
-
-  // Formations
-  static String trainingDetails(String trainingId) {
-    return '/training-details/$trainingId';
-  }
-
-  static String lessonPlayer(String enrollmentId) {
-    return '/learn/player/$enrollmentId';
-  }
-
-  // Enterprise Portal
-  static String enterprisePortal(String slug) {
-    return '/company/$slug/dashboard/overview';
-  }
-
-  static String enterprisePortalSection(String slug, String section) {
-    return '/company/$slug/dashboard/$section';
-  }
-
-  // Paiement
-  static String payment({String? returnTo}) {
-    return returnTo != null ? '/payment?returnTo=$returnTo' : '/payment';
-  }
-
-  // Profil public
-  static String publicProfile({String? thixId}) {
-    return thixId != null ? '/public-profile?thixId=$thixId' : '/public-profile';
-  }
-}
-
-// ============================================================================
-// ROUTER PRINCIPAL
-// ============================================================================
 class AppRouter {
-  static GoRouter create(AuthController auth, {Listenable? extraRefreshListenable}) {
-    final refresh = extraRefreshListenable == null ? auth : Listenable.merge([auth, extraRefreshListenable]);
-    
+  static GoRouter create(AuthController auth) {
     return GoRouter(
       initialLocation: AppRoutes.home,
-      refreshListenable: refresh,
+      refreshListenable: auth,
       redirect: (context, state) {
         final location = state.matchedLocation;
         final isLoggedIn = auth.isAuthenticated;
-        final isAuthPage = location == AppRoutes.login || 
-                           location == AppRoutes.personalReg || 
-                           location == AppRoutes.enterpriseReg;
+        final isAuthPage = location == AppRoutes.login || location == AppRoutes.personalReg || location == AppRoutes.enterpriseReg;
+        final isAdmin = location == AppRoutes.admin || location.startsWith('${AppRoutes.admin}/');
         final isPublic = location == AppRoutes.home ||
-                         location == AppRoutes.publicProfile ||
-                         location == AppRoutes.jobs ||
-                         location == AppRoutes.opportunities ||
-                         location == AppRoutes.events ||
-                         location == AppRoutes.education ||
-                         location == AppRoutes.trainingHome;
+            location == AppRoutes.publicProfile ||
+            location == AppRoutes.jobs ||
+            location == AppRoutes.opportunities ||
+            location == AppRoutes.events ||
+            location == AppRoutes.education;
 
         final isProtected = !isPublic && !isAuthPage;
-        
         if (!isLoggedIn && isProtected) return AppRoutes.login;
+
+        // Admin area: authenticated + RBAC role required.
+        // NOTE: We also enforce this at UI level (AdminPage), but keeping a router
+        // redirect avoids exposing admin shells to unauthorized sessions.
+        if (isAdmin) {
+          if (!isLoggedIn) return AppRoutes.login;
+          // Best-effort synchronous guard: if role is not cached yet, UI will
+          // show a protected screen. For hard security, rely on Supabase RLS.
+          // We do not block navigation here with async calls.
+        }
+
+        // Payment-gated activation: block protected areas until UID is assigned.
+        if (isLoggedIn) {
+          final u = auth.currentUser;
+          final isActivated = (u?.hasRealThixId ?? false);
+          final hasActiveTrial = (u?.hasActiveTrial ?? false);
+          final isPaymentOrReceipt = location == AppRoutes.payment || location == AppRoutes.activationReceipt;
+          // Allow users to access their dashboard(s) before activation to review
+          // their submitted information. Keep other protected areas gated.
+          final isDashboard = location == AppRoutes.userDashboard || location == AppRoutes.enterpriseDashboard;
+          if (!isActivated && !hasActiveTrial && !isAuthPage && !isPublic && !isPaymentOrReceipt && !isDashboard) {
+            final receiptReturn = Uri.encodeComponent(AppRoutes.activationReceipt);
+            return '${AppRoutes.payment}?returnTo=$receiptReturn';
+          }
+        }
+
+        // Enforce strict separation between Personal and Enterprise spaces.
+        if (isLoggedIn) {
+          final t = auth.currentUser?.accountType;
+          if (location == AppRoutes.userDashboard && t == AccountType.enterprise) return AppRoutes.enterpriseDashboard;
+          if (location == AppRoutes.enterpriseDashboard && t == AccountType.personal) return AppRoutes.userDashboard;
+        }
+
         if (isLoggedIn && isAuthPage) {
           final t = auth.currentUser?.accountType;
           return t == AccountType.enterprise ? AppRoutes.enterpriseDashboard : AppRoutes.userDashboard;
         }
-        
         return null;
       },
       routes: [
-        // Page d'accueil
-        GoRoute(
-          path: AppRoutes.home,
-          name: 'home',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: HomePagePremium(),
-          ),
+      GoRoute(
+        path: AppRoutes.home,
+        name: 'home',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: HomePage(),
         ),
-        
-        // Authentification
-        GoRoute(
-          path: AppRoutes.login,
-          name: 'login',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: LoginPage(),
-          ),
+      ),
+      GoRoute(
+        path: AppRoutes.login,
+        name: 'login',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: LoginPage(),
         ),
-        GoRoute(
-          path: AppRoutes.personalReg,
-          name: 'personalReg',
-          pageBuilder: (context, state) => NoTransitionPage(
-            child: PersonalRegistrationPage(initialStep: 1),
-          ),
+      ),
+      GoRoute(
+        path: AppRoutes.personalReg,
+        name: 'personalReg',
+        pageBuilder: (context, state) {
+          final stepStr = state.uri.queryParameters['step'];
+          final step = int.tryParse(stepStr ?? '') ?? 1;
+          return NoTransitionPage(child: PersonalRegistrationPage(initialStep: step));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.enterpriseReg,
+        name: 'enterpriseReg',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: EnterpriseRegistrationPage(),
         ),
-        GoRoute(
-          path: AppRoutes.enterpriseReg,
-          name: 'enterpriseReg',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: EnterpriseRegistrationPage(),
-          ),
+      ),
+      GoRoute(
+        path: AppRoutes.payment,
+        name: 'payment',
+        pageBuilder: (context, state) {
+          final returnTo = state.uri.queryParameters['returnTo'];
+          return NoTransitionPage(child: PaymentGatewayPage(returnTo: returnTo));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.activationReceipt,
+        name: 'activationReceipt',
+        pageBuilder: (context, state) {
+          final qp = state.uri.queryParameters;
+          final paidAt = DateTime.tryParse((qp['paidAt'] ?? '').trim());
+          return NoTransitionPage(
+            child: ActivationReceiptPage(
+              txRef: qp['txRef'],
+              method: qp['method'],
+              amount: qp['amount'],
+              currency: qp['currency'],
+              paidAt: paidAt,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.publicProfile,
+        name: 'publicProfile',
+        pageBuilder: (context, state) => NoTransitionPage(
+          child: PublicProfilePage(initialThixId: state.uri.queryParameters['thixId']),
         ),
-        
-        // Dashboards
-        GoRoute(
-          path: AppRoutes.userDashboard,
-          name: 'userDashboard',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: UserDashboardPage(),
-          ),
+      ),
+      GoRoute(
+        path: AppRoutes.userDashboard,
+        name: 'userDashboard',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: UserDashboardPage(),
         ),
-        GoRoute(
-          path: AppRoutes.enterpriseDashboard,
-          name: 'enterpriseDashboard',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: EnterpriseDashboardPage(),
-          ),
+      ),
+      GoRoute(
+        path: AppRoutes.enterpriseDashboard,
+        name: 'enterpriseDashboard',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: EnterpriseDashboardPage(),
         ),
-        
-        // Événements
-        GoRoute(
-          path: AppRoutes.events,
-          name: 'events',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: EventsPage(),
-          ),
+      ),
+      GoRoute(
+        path: AppRoutes.chat,
+        name: 'chat',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: ThixChatPage(),
         ),
-        GoRoute(
-          path: '/events/:eventId',
-          name: 'eventDetails',
-          pageBuilder: (context, state) {
-            final eventId = state.pathParameters['eventId'] ?? '';
-            return NoTransitionPage(child: EventDetailsPage(eventId: eventId));
-          },
+      ),
+      GoRoute(
+        path: AppRoutes.vault,
+        name: 'vault',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: DocumentVaultPage(),
         ),
-        GoRoute(
-          path: '/events/:eventId/register',
-          name: 'eventRegister',
-          pageBuilder: (context, state) {
-            final eventId = state.pathParameters['eventId'] ?? '';
-            return NoTransitionPage(child: EventRegisterPage(eventId: eventId));
-          },
+      ),
+      GoRoute(
+        path: AppRoutes.settings,
+        name: 'settings',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: SettingsPage(),
         ),
-        GoRoute(
-          path: '/events/:eventId/ticket/:registrationId',
-          name: 'eventTicket',
-          pageBuilder: (context, state) {
-            final eventId = state.pathParameters['eventId'] ?? '';
-            final registrationId = state.pathParameters['registrationId'] ?? '';
-            return NoTransitionPage(child: EventTicketPage(eventId: eventId, registrationId: registrationId));
-          },
+      ),
+      GoRoute(
+        path: AppRoutes.network,
+        name: 'network',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: NetworkPage(),
         ),
-        GoRoute(
-          path: AppRoutes.userEventsDashboard,
-          name: 'userEventsDashboard',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: UserEventDashboardPage(),
-          ),
+      ),
+      GoRoute(
+        path: AppRoutes.jobs,
+        name: 'jobs',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: JobsPage(),
         ),
-        
-        // Profil public
-        GoRoute(
-          path: AppRoutes.publicProfile,
-          name: 'publicProfile',
-          pageBuilder: (context, state) => NoTransitionPage(
-            child: PublicProfilePage(initialThixId: state.uri.queryParameters['thixId']),
-          ),
+      ),
+      GoRoute(
+        path: AppRoutes.opportunities,
+        name: 'opportunities',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: OpportunitiesPage(),
         ),
-        
-        // Services
-        GoRoute(
-          path: AppRoutes.chat,
-          name: 'chat',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: ThixChatPage(),
-          ),
+      ),
+      GoRoute(
+        path: '/opportunities/:opportunityId',
+        name: 'opportunityDetails',
+        pageBuilder: (context, state) {
+          final opportunityId = state.pathParameters['opportunityId'] ?? '';
+          final applied = (state.uri.queryParameters['applied'] ?? '').trim() == '1';
+          return NoTransitionPage(child: OpportunityDetailsPage(opportunityId: opportunityId, applied: applied));
+        },
+      ),
+      GoRoute(
+        path: '/opportunities/:opportunityId/apply',
+        name: 'opportunityApply',
+        pageBuilder: (context, state) {
+          final opportunityId = state.pathParameters['opportunityId'] ?? '';
+          return NoTransitionPage(child: OpportunityApplyPage(opportunityId: opportunityId));
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId',
+        name: 'jobDetails',
+        pageBuilder: (context, state) {
+          final jobId = state.pathParameters['jobId'] ?? '';
+          final applied = (state.uri.queryParameters['applied'] ?? '').trim() == '1';
+          return NoTransitionPage(child: JobDetailsPage(jobId: jobId, applied: applied));
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId/apply',
+        name: 'jobApply',
+        pageBuilder: (context, state) {
+          final jobId = state.pathParameters['jobId'] ?? '';
+          return NoTransitionPage(child: JobApplyPage(jobId: jobId));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.events,
+        name: 'events',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: EventsPage(),
         ),
-        GoRoute(
-          path: AppRoutes.vault,
-          name: 'vault',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: DocumentVaultPage(),
-          ),
+      ),
+      GoRoute(
+        path: '/events/:eventId',
+        name: 'eventDetails',
+        pageBuilder: (context, state) {
+          final eventId = state.pathParameters['eventId'] ?? '';
+          final registered = (state.uri.queryParameters['registered'] ?? '').trim() == '1';
+          return NoTransitionPage(child: EventDetailsPage(eventId: eventId, registered: registered));
+        },
+      ),
+      GoRoute(
+        path: '/events/:eventId/register',
+        name: 'eventRegister',
+        pageBuilder: (context, state) {
+          final eventId = state.pathParameters['eventId'] ?? '';
+          return NoTransitionPage(child: EventRegisterPage(eventId: eventId));
+        },
+      ),
+      GoRoute(
+        path: '/events/:eventId/ticket/:registrationId',
+        name: 'eventTicket',
+        pageBuilder: (context, state) {
+          final eventId = state.pathParameters['eventId'] ?? '';
+          final registrationId = state.pathParameters['registrationId'] ?? '';
+          return NoTransitionPage(child: EventTicketPage(eventId: eventId, registrationId: registrationId));
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.education,
+        name: 'education',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: EducationPage(),
         ),
-        GoRoute(
-          path: AppRoutes.settings,
-          name: 'settings',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: SettingsPage(),
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.network,
-          name: 'network',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: NetworkPage(),
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.jobs,
-          name: 'jobs',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: JobsPage(),
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.opportunities,
-          name: 'opportunities',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: OpportunitiesPage(),
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.education,
-          name: 'education',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: EducationPage(),
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.trainingHome,
-          name: 'trainingHome',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: TrainingHomePage(),
-          ),
-        ),
-        GoRoute(
-          path: '${AppRoutes.trainingDetailsBasePath}/:trainingId',
-          name: 'trainingDetails',
-          pageBuilder: (context, state) {
-            final id = state.pathParameters['trainingId'] ?? '';
-            return NoTransitionPage(child: TrainingDetailsPage(trainingId: id));
-          },
-        ),
-        GoRoute(
-          path: AppRoutes.learningDashboard,
-          name: 'learningDashboard',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: LearningDashboardPage(),
-          ),
-        ),
-        GoRoute(
-          path: '${AppRoutes.lessonPlayer}/:enrollmentId',
-          name: 'lessonPlayer',
-          pageBuilder: (context, state) {
-            final id = state.pathParameters['enrollmentId'] ?? '';
-            return NoTransitionPage(child: LessonPlayerPage(enrollmentId: id));
-          },
-        ),
-        GoRoute(
-          path: AppRoutes.thixMarket,
-          name: 'thixMarket',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: ThixMarketPage(),
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.thixSante,
-          name: 'thixSante',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: ThixSantePage(),
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.reservation,
-          name: 'reservation',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: ThixReservationPage(),
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.thixMoney,
-          name: 'thixMoney',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: ThixMoneyPage(),
-          ),
-        ),
-        GoRoute(
-          path: AppRoutes.incubator,
-          name: 'incubator',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: IncubatorPage(),
-          ),
-        ),
+      ),
+
+       // Admin web portal (RBAC enforced at page + RLS at DB).
+       GoRoute(
+         path: '${AppRoutes.admin}/:module',
+         name: 'admin',
+         pageBuilder: (context, state) {
+           final module = AdminModuleX.fromSlug(state.pathParameters['module']);
+           return NoTransitionPage(child: AdminPage(module: module));
+         },
+       ),
+       GoRoute(
+         path: AppRoutes.admin,
+         name: 'adminRoot',
+         redirect: (_, __) => '${AppRoutes.admin}/${AdminModule.overview.slug}',
+       ),
       ],
     );
   }
+
 }
 
-// ============================================================================
-// TRANSITION SANS ANIMATION
-// ============================================================================
-class NoTransitionPage extends Page {
-  final Widget child;
-  
-  const NoTransitionPage({required this.child, super.key});
+class AppRoutes {
+  static const String home = '/';
+  static const String login = '/login';
+  static const String personalReg = '/personal-reg';
+  static const String enterpriseReg = '/enterprise-reg';
+  static const String payment = '/payment';
+  static const String activationReceipt = '/activation-receipt';
+  static const String publicProfile = '/public-profile';
+  static const String userDashboard = '/user-dashboard';
+  static const String enterpriseDashboard = '/enterprise-dashboard';
+  static const String chat = '/chat';
+  static const String vault = '/vault';
+  static const String settings = '/settings';
+  static const String network = '/network';
+  static const String jobs = '/jobs';
+  static const String opportunities = '/opportunities';
+  static const String events = '/events';
+  static const String education = '/education';
+  static const String admin = '/admin';
+}
 
-  @override
-  Route createRoute(BuildContext context) {
-    return PageRouteBuilder(
-      settings: this,
-      pageBuilder: (context, animation, secondaryAnimation) => child,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
-      transitionDuration: Duration.zero,
-    );
+extension GoRouterBackHelpers on BuildContext {
+  /// Pops if possible; otherwise navigates to [fallbackLocation].
+  void popOrGo(String fallbackLocation) {
+    final router = GoRouter.of(this);
+    if (router.canPop()) {
+      pop();
+      return;
+    }
+    go(fallbackLocation);
   }
 }
