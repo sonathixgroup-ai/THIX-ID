@@ -1,78 +1,38 @@
-import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:thix_id/models/job_application.dart';
-import 'package:thix_id/models/job_posting.dart';
+  List<JobPosting> _mapRows(List<Map<String, dynamic>> rows) {
+    final now = DateTime.now();
 
-class JobService {
-  final SupabaseClient _client = Supabase.instance.client;
-  static const String table = 'thix_job_offers';
-
-  /// Récupère la liste des jobs depuis Supabase
-  Future<List<JobPosting>> listJobs() async {
-    try {
-      final response = await _client
-          .from(table)
-          .select('*')
-          .order('created_at', ascending: false);
-
-      // CORRECTION : Cast explicite pour éviter les erreurs de type
-      return (response as List<dynamic>)
-          .map((json) => JobPosting.fromJson(json as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      debugPrint('JobService.listJobs error: $e');
-      return _getFallbackJobs();
-    }
+    return rows.map((r) {
+      return JobPosting(
+        // Utilisation de ?? pour fournir les valeurs obligatoires exigées par votre constructeur
+        id: (r['id'] ?? _id('job')).toString(),
+        recruiterUserId: r['recruiter_user_id']?.toString(),
+        companyId: r['company_id']?.toString(),
+        title: (r['title'] ?? '—').toString(),
+        company: (r['company'] ?? '').toString(),
+        companyLogoUrl: r['company_logo_url']?.toString(),
+        isVerifiedEmployer: (r['is_verified_employer'] ?? false) as bool,
+        location: (r['location'] ?? '').toString(),
+        salary: (r['salary'] ?? '—').toString(),
+        salaryMin: r['salary_min'] as int?,
+        salaryMax: r['salary_max'] as int?,
+        salaryCurrency: r['salary_currency']?.toString(),
+        type: (r['type'] ?? 'Offre').toString(),
+        workMode: r['work_mode']?.toString(),
+        category: r['category']?.toString(),
+        industry: r['industry']?.toString(),
+        experienceLevel: r['experience_level']?.toString(),
+        description: (r['description'] ?? '').toString(),
+        requirements: (r['requirements'] is List) ? List<String>.from(r['requirements']) : [],
+        skills: (r['skills'] is List) ? List<String>.from(r['skills']) : [],
+        responsibilities: (r['responsibilities'] is List) ? List<String>.from(r['responsibilities']) : [],
+        benefits: (r['benefits'] is List) ? List<String>.from(r['benefits']) : [],
+        deadline: r['deadline'] != null ? DateTime.tryParse(r['deadline'].toString()) : null,
+        status: (r['status'] ?? 'approved').toString(),
+        applicantsCount: (r['applicants_count'] ?? 0) as int?,
+        isFeatured: (r['is_featured'] ?? false) as bool,
+        isSuggested: (r['is_suggested'] ?? false) as bool,
+        createdAt: DateTime.tryParse(r['created_at']?.toString() ?? '') ?? now,
+        updatedAt: DateTime.tryParse(r['updated_at']?.toString() ?? '') ?? now,
+      );
+    }).toList();
   }
-
-  /// Récupère un job par son ID
-  Future<JobPosting?> fetchJob(String jobId) async {
-    try {
-      final data = await _client.from(table).select('*').eq('id', jobId).single();
-      // CORRECTION : Utilisation de fromJson
-      return JobPosting.fromJson(data as Map<String, dynamic>);
-    } catch (e) {
-      debugPrint('JobService.fetchJob error: $e');
-      return null;
-    }
-  }
-
-  /// Soumet une candidature
-  Future<JobApplication> submitApplication({
-    required String jobId, 
-    required String applicantThixId, 
-    String? message
-  }) async {
-    try {
-      final Map<String, dynamic> data = {
-        'job_id': jobId,
-        'applicant_thix_id': applicantThixId.trim().toUpperCase(),
-        'message': message?.trim(),
-        'created_at': DateTime.now().toIso8601String(),
-      };
-
-      await _client.from('thix_job_applications').insert(data);
-      
-      // Note : Assurez-vous que JobApplication a aussi un .fromJson()
-      return JobApplication.fromJson(data);
-    } catch (e) {
-      debugPrint('JobService.submitApplication error: $e');
-      throw Exception('Impossible de soumettre la candidature.');
-    }
-  }
-
-  /// Données de secours sécurisées (n'utilise plus le constructeur directement)
-  List<JobPosting> _getFallbackJobs() {
-    return [
-      JobPosting.fromJson({
-        'id': 'job_fallback_001',
-        'title': 'Directeur des Opérations',
-        'company': 'Kamoto Copper Company',
-        'location': 'Kolwezi',
-        'status': 'approved',
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }),
-    ];
-  }
-}
