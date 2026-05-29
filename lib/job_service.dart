@@ -38,7 +38,9 @@ class JobService {
       final response = await SupabaseService.select(
         table,
         select: '*',
-        filter: {'id': jobId},
+        filters: {
+          'id': jobId,
+        },
       );
 
       if (response == null || response.isEmpty) {
@@ -74,8 +76,10 @@ class JobService {
     try {
       await SupabaseService.update(
         table,
-        job.toMap(),
-        filter: {'id': job.id},
+        data: job.toMap(),
+        filters: {
+          'id': job.id,
+        },
       );
 
       return true;
@@ -90,7 +94,9 @@ class JobService {
     try {
       await SupabaseService.delete(
         table,
-        filter: {'id': jobId},
+        filters: {
+          'id': jobId,
+        },
       );
 
       return true;
