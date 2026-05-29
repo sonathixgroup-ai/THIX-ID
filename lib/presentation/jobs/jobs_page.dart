@@ -29,7 +29,6 @@ class _JobsPageState extends State<JobsPage> {
   int _suggestIndex = 0;
   bool _suggestAutoplayStarted = false;
 
-  // Filters (kept intentionally simple)
   final Set<String> _typeFilters = {};
   final Set<String> _workModeFilters = {};
 
@@ -134,7 +133,6 @@ class _JobsPageState extends State<JobsPage> {
       if (_typeFilters.isNotEmpty && !_typeFilters.contains(j.type.toLowerCase())) return false;
       final wm = (j.workMode ?? '').trim().toLowerCase();
       if (_workModeFilters.isNotEmpty && (wm.isEmpty || !_workModeFilters.contains(wm))) return false;
-      // Only show approved when status exists.
       final st = (j.status ?? '').trim().toLowerCase();
       if (st.isNotEmpty && st != 'approved') return false;
       return true;
@@ -199,7 +197,7 @@ class _JobsPageState extends State<JobsPage> {
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final accent = isDark ? InstitutionalColors.civicBlueSoft : InstitutionalColors.civicBlue;
-    final divider = isDark ? Colors.white.withValues(alpha: 0.10) : LightModeColors.divider;
+    final divider = isDark ? Colors.white.withOpacity(0.10) : LightModeColors.divider;
 
     if (featured.isNotEmpty) _ensureFeaturedAutoplayStarted();
     if (suggestions.isNotEmpty) _ensureSuggestAutoplayStarted();
@@ -225,9 +223,9 @@ class _JobsPageState extends State<JobsPage> {
                           Expanded(
                             child: Text('Emploi', style: context.textStyles.titleLarge?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w900)),
                           ),
-                            _ThixIconButton(icon: Icons.dashboard_rounded, tooltip: 'Dashboard', onTap: () => context.push(AppRoutes.jobDashboard), accent: accent, divider: divider),
+                          _ThixIconButton(icon: Icons.dashboard_rounded, tooltip: 'Dashboard', onTap: () => context.push(AppRoutes.jobDashboard), accent: accent, divider: divider),
                           const SizedBox(width: 10),
-                            _ThixIconButton(icon: Icons.tune_rounded, tooltip: 'Filtres', onTap: _openFilters, accent: accent, divider: divider),
+                          _ThixIconButton(icon: Icons.tune_rounded, tooltip: 'Filtres', onTap: _openFilters, accent: accent, divider: divider),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.md),
@@ -262,7 +260,7 @@ class _JobsPageState extends State<JobsPage> {
                   child: _loading
                       ? Center(child: CircularProgressIndicator(color: accent))
                       : (_error != null)
-                          ? Center(child: Text(_error!, style: context.textStyles.bodyLarge?.copyWith(color: cs.onSurface.withValues(alpha: 0.72))))
+                          ? Center(child: Text(_error!, style: context.textStyles.bodyLarge?.copyWith(color: cs.onSurface.withOpacity(0.72))))
                           : RefreshIndicator(
                               color: accent,
                               onRefresh: _load,
@@ -278,7 +276,7 @@ class _JobsPageState extends State<JobsPage> {
                                         Expanded(
                                           child: Text(
                                             'Offres vérifiées, parcours clair, candidature sécurisée.',
-                                            style: context.textStyles.bodySmall?.copyWith(color: cs.onSurface.withValues(alpha: 0.75), height: 1.4),
+                                            style: context.textStyles.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.75), height: 1.4),
                                           ),
                                         ),
                                         Container(
@@ -286,9 +284,9 @@ class _JobsPageState extends State<JobsPage> {
                                           decoration: BoxDecoration(
                                             borderRadius: BorderRadius.circular(AppRadius.full),
                                             border: Border.all(color: divider),
-                                            color: cs.surface.withValues(alpha: isDark ? 0.60 : 0.92),
+                                            color: cs.surface.withOpacity(isDark ? 0.60 : 0.92),
                                           ),
-                                          child: Text('${jobs.length}', style: context.textStyles.labelLarge?.copyWith(color: cs.onSurface.withValues(alpha: 0.85), fontWeight: FontWeight.w900)),
+                                          child: Text('${jobs.length}', style: context.textStyles.labelLarge?.copyWith(color: cs.onSurface.withOpacity(0.85), fontWeight: FontWeight.w900)),
                                         ),
                                       ],
                                     ),
@@ -378,7 +376,7 @@ class _ThixInfoBackground extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [navy.withValues(alpha: 0.98), navy2.withValues(alpha: 0.94), accent.withValues(alpha: 0.10)],
+          colors: [navy.withOpacity(0.98), navy2.withOpacity(0.94), accent.withOpacity(0.10)],
         ),
       ),
       child: const SizedBox.expand(),
@@ -413,13 +411,13 @@ class _ThixSearchBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: surface.withValues(alpha: isDark ? 0.55 : 0.92),
+        color: surface.withOpacity(isDark ? 0.55 : 0.92),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: divider),
       ),
       child: Row(
         children: [
-          Icon(Icons.search_rounded, color: onSurface.withValues(alpha: 0.65)),
+          Icon(Icons.search_rounded, color: onSurface.withOpacity(0.65)),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -429,7 +427,7 @@ class _ThixSearchBar extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 hintText: hint,
-                hintStyle: context.textStyles.bodyMedium?.copyWith(color: onSurface.withValues(alpha: 0.60)),
+                hintStyle: context.textStyles.bodyMedium?.copyWith(color: onSurface.withOpacity(0.60)),
                 border: InputBorder.none,
               ),
             ),
@@ -437,7 +435,7 @@ class _ThixSearchBar extends StatelessWidget {
           if (controller.text.trim().isNotEmpty)
             IconButton(
               onPressed: onClear,
-              icon: Icon(Icons.close_rounded, color: onSurface.withValues(alpha: 0.65)),
+              icon: Icon(Icons.close_rounded, color: onSurface.withOpacity(0.65)),
             ),
         ],
       ),
@@ -468,7 +466,7 @@ class _ThixIconButton extends StatelessWidget {
           height: 44,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            color: cs.surface.withValues(alpha: isDark ? 0.55 : 0.92),
+            color: cs.surface.withOpacity(isDark ? 0.55 : 0.92),
             border: Border.all(color: divider),
           ),
           child: Icon(icon, color: accent),
@@ -511,9 +509,9 @@ class _ThixJobTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: surface.withValues(alpha: isDark ? 0.55 : 0.92),
+          color: surface.withOpacity(isDark ? 0.55 : 0.92),
           borderRadius: BorderRadius.circular(AppRadius.xl),
-          border: Border.all(color: border.withValues(alpha: 0.65)),
+          border: Border.all(color: border.withOpacity(0.65)),
         ),
         child: Row(
           children: [
@@ -533,7 +531,7 @@ class _ThixJobTile extends StatelessWidget {
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [accent.withValues(alpha: 0.95), Theme.of(context).colorScheme.primary.withValues(alpha: 0.90)],
+                          colors: [accent.withOpacity(0.95), Theme.of(context).colorScheme.primary.withOpacity(0.90)],
                         ),
                       ),
                       child: Center(child: Icon(job.isVerifiedEmployer ? Icons.verified_rounded : Icons.business_rounded, color: Colors.white)),
@@ -546,7 +544,7 @@ class _ThixJobTile extends StatelessWidget {
                 children: [
                   Text(job.title, style: context.textStyles.titleMedium?.copyWith(color: onSurface, fontWeight: FontWeight.w900), maxLines: 2, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 4),
-                  Text('${job.company} • ${job.location}', style: context.textStyles.bodySmall?.copyWith(color: onSurface.withValues(alpha: 0.70)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text('${job.company} • ${job.location}', style: context.textStyles.bodySmall?.copyWith(color: onSurface.withOpacity(0.70)), maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -563,7 +561,7 @@ class _ThixJobTile extends StatelessWidget {
             const SizedBox(width: 10),
             IconButton(
               onPressed: onSave,
-              icon: Icon(saved ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded, color: saved ? accent : onSurface.withValues(alpha: 0.65)),
+              icon: Icon(saved ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded, color: saved ? accent : onSurface.withOpacity(0.65)),
             ),
           ],
         ),
@@ -587,13 +585,13 @@ class _ThixMetaPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.full),
-        color: surface.withValues(alpha: isDark ? 0.40 : 0.85),
+        color: surface.withOpacity(isDark ? 0.40 : 0.85),
         border: Border.all(color: divider),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: onSurface.withValues(alpha: 0.65)),
+          Icon(icon, size: 14, color: onSurface.withOpacity(0.65)),
           const SizedBox(width: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 170),
@@ -618,7 +616,7 @@ class _NoOtherOffersCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: surface.withValues(alpha: isDark ? 0.55 : 0.92),
+        color: surface.withOpacity(isDark ? 0.55 : 0.92),
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: divider),
       ),
@@ -626,7 +624,7 @@ class _NoOtherOffersCard extends StatelessWidget {
         children: [
           Icon(Icons.info_outline_rounded, color: accent),
           const SizedBox(width: AppSpacing.sm),
-          Expanded(child: Text("Pas d'autres offres pour l'instant.", style: context.textStyles.bodyMedium?.copyWith(color: onSurface.withValues(alpha: 0.80), fontWeight: FontWeight.w700))),
+          Expanded(child: Text("Pas d'autres offres pour l'instant.", style: context.textStyles.bodyMedium?.copyWith(color: onSurface.withOpacity(0.80), fontWeight: FontWeight.w700))),
         ],
       ),
     );
@@ -647,15 +645,15 @@ class _ThixEmptyState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: surface.withValues(alpha: isDark ? 0.55 : 0.92),
+        color: surface.withOpacity(isDark ? 0.55 : 0.92),
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: divider),
       ),
       child: Row(
         children: [
-          Icon(Icons.search_off_rounded, color: onSurface.withValues(alpha: 0.65)),
+          Icon(Icons.search_off_rounded, color: onSurface.withOpacity(0.65)),
           const SizedBox(width: AppSpacing.sm),
-          Expanded(child: Text('Aucun résultat. Essaie une autre recherche.', style: context.textStyles.bodyMedium?.copyWith(color: onSurface.withValues(alpha: 0.70)))),
+          Expanded(child: Text('Aucun résultat. Essaie une autre recherche.', style: context.textStyles.bodyMedium?.copyWith(color: onSurface.withOpacity(0.70)))),
           if (onClear != null)
             TextButton(
               onPressed: onClear,
@@ -696,7 +694,7 @@ class _SimpleActiveFiltersRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppRadius.full),
                   border: Border.all(color: divider),
-                  color: cs.surface.withValues(alpha: isDark ? 0.55 : 0.92),
+                  color: cs.surface.withOpacity(isDark ? 0.55 : 0.92),
                 ),
                 child: Text(chips[i], style: context.textStyles.labelMedium?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w800)),
               ),
@@ -726,13 +724,13 @@ class _JobsFilterSheetState extends State<_JobsFilterSheet> {
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final accent = isDark ? InstitutionalColors.civicBlueSoft : InstitutionalColors.civicBlue;
-    final divider = isDark ? Colors.white.withValues(alpha: 0.10) : LightModeColors.divider;
+    final divider = isDark ? Colors.white.withOpacity(0.10) : LightModeColors.divider;
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: BoxDecoration(
-          color: cs.surface.withValues(alpha: isDark ? 0.92 : 0.96),
+          color: cs.surface.withOpacity(isDark ? 0.92 : 0.96),
           borderRadius: const BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
           border: Border.all(color: divider),
         ),
@@ -747,7 +745,7 @@ class _JobsFilterSheetState extends State<_JobsFilterSheet> {
                   Row(
                     children: [
                       Expanded(child: Text('Filtres', style: context.textStyles.titleLarge?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w900))),
-                      IconButton(onPressed: () => context.pop(), icon: Icon(Icons.close_rounded, color: cs.onSurface.withValues(alpha: 0.70))),
+                      IconButton(onPressed: () => context.pop(), icon: Icon(Icons.close_rounded, color: cs.onSurface.withOpacity(0.70))),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
@@ -855,8 +853,8 @@ class _JobsFilterSheetState extends State<_JobsFilterSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppRadius.full),
-          color: selected ? accent.withValues(alpha: isDark ? 0.18 : 0.14) : Theme.of(context).colorScheme.surface.withValues(alpha: isDark ? 0.65 : 0.92),
-          border: Border.all(color: selected ? accent.withValues(alpha: 0.65) : divider),
+          color: selected ? accent.withOpacity(isDark ? 0.18 : 0.14) : Theme.of(context).colorScheme.surface.withOpacity(isDark ? 0.65 : 0.92),
+          border: Border.all(color: selected ? accent.withOpacity(0.65) : divider),
         ),
         child: Text(label, style: context.textStyles.labelLarge?.copyWith(color: onSurface, fontWeight: FontWeight.w900)),
       ),
@@ -894,7 +892,7 @@ class _SectionHeader extends StatelessWidget {
             children: [
               Text(title, style: context.textStyles.titleMedium?.copyWith(color: onSurface, fontWeight: FontWeight.w900)),
               const SizedBox(height: 2),
-              Text(subtitle, style: context.textStyles.bodySmall?.copyWith(color: onSurface.withValues(alpha: 0.70), height: 1.3)),
+              Text(subtitle, style: context.textStyles.bodySmall?.copyWith(color: onSurface.withOpacity(0.70), height: 1.3)),
             ],
           ),
         ),
@@ -945,8 +943,8 @@ class _FeaturedJobsRow extends StatelessWidget {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppRadius.xl),
-                border: Border.all(color: accent.withValues(alpha: 0.35)),
-                color: surface.withValues(alpha: isDark ? 0.55 : 0.92),
+                border: Border.all(color: accent.withOpacity(0.35)),
+                color: surface.withOpacity(isDark ? 0.55 : 0.92),
               ),
               child: Row(
                 children: [
@@ -962,10 +960,10 @@ class _FeaturedJobsRow extends StatelessWidget {
                                 gradient: LinearGradient(
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
-                                  colors: [accent.withValues(alpha: 0.92), InstitutionalColors.navy.withValues(alpha: 0.95)],
+                                  colors: [accent.withOpacity(0.92), InstitutionalColors.navy.withOpacity(0.95)],
                                 ),
                               ),
-                              child: Center(child: Icon(Icons.work_rounded, color: Colors.white.withValues(alpha: 0.95))),
+                              child: Center(child: Icon(Icons.work_rounded, color: Colors.white.withOpacity(0.95))),
                             ),
                     ),
                   ),
@@ -979,7 +977,7 @@ class _FeaturedJobsRow extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(AppRadius.full),
-                            color: accent.withValues(alpha: isDark ? 0.14 : 0.12),
+                            color: accent.withOpacity(isDark ? 0.14 : 0.12),
                             border: Border.all(color: divider),
                           ),
                           child: Text('À la une', style: context.textStyles.labelSmall?.copyWith(color: onSurface, fontWeight: FontWeight.w900)),
@@ -987,13 +985,13 @@ class _FeaturedJobsRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         Text(j.title, style: context.textStyles.titleSmall?.copyWith(color: onSurface, fontWeight: FontWeight.w900), maxLines: 2, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 4),
-                        Text(j.company, style: context.textStyles.bodySmall?.copyWith(color: onSurface.withValues(alpha: 0.72)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(j.company, style: context.textStyles.bodySmall?.copyWith(color: onSurface.withOpacity(0.72)), maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            Icon(Icons.place_rounded, size: 16, color: onSurface.withValues(alpha: 0.60)),
+                            Icon(Icons.place_rounded, size: 16, color: onSurface.withOpacity(0.60)),
                             const SizedBox(width: 6),
-                            Expanded(child: Text(j.location, style: context.textStyles.bodySmall?.copyWith(color: onSurface.withValues(alpha: 0.70)), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                            Expanded(child: Text(j.location, style: context.textStyles.bodySmall?.copyWith(color: onSurface.withOpacity(0.70)), maxLines: 1, overflow: TextOverflow.ellipsis)),
                           ],
                         ),
                       ],
@@ -1052,7 +1050,7 @@ class _SuggestedJobsRow extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppRadius.xl),
                 border: Border.all(color: divider),
-                color: surface.withValues(alpha: isDark ? 0.55 : 0.92),
+                color: surface.withOpacity(isDark ? 0.55 : 0.92),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1069,10 +1067,10 @@ class _SuggestedJobsRow extends StatelessWidget {
                                 gradient: LinearGradient(
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
-                                  colors: [accent.withValues(alpha: 0.90), InstitutionalColors.navy.withValues(alpha: 0.92)],
+                                  colors: [accent.withOpacity(0.90), InstitutionalColors.navy.withOpacity(0.92)],
                                 ),
                               ),
-                              child: Center(child: Icon(Icons.auto_awesome_rounded, color: Colors.white.withValues(alpha: 0.95))),
+                              child: Center(child: Icon(Icons.auto_awesome_rounded, color: Colors.white.withOpacity(0.95))),
                             ),
                     ),
                   ),
@@ -1083,14 +1081,14 @@ class _SuggestedJobsRow extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(AppRadius.full),
-                          color: accent.withValues(alpha: isDark ? 0.14 : 0.12),
+                          color: accent.withOpacity(isDark ? 0.14 : 0.12),
                           border: Border.all(color: divider),
                         ),
                         child: Text('Suggestion', style: context.textStyles.labelSmall?.copyWith(color: onSurface, fontWeight: FontWeight.w900)),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(j.company, style: context.textStyles.bodySmall?.copyWith(color: onSurface.withValues(alpha: 0.72)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        child: Text(j.company, style: context.textStyles.bodySmall?.copyWith(color: onSurface.withOpacity(0.72)), maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                     ],
                   ),
@@ -1099,9 +1097,9 @@ class _SuggestedJobsRow extends StatelessWidget {
                   const Spacer(),
                   Row(
                     children: [
-                      Icon(Icons.place_rounded, size: 16, color: onSurface.withValues(alpha: 0.60)),
+                      Icon(Icons.place_rounded, size: 16, color: onSurface.withOpacity(0.60)),
                       const SizedBox(width: 6),
-                      Expanded(child: Text(j.location, style: context.textStyles.bodySmall?.copyWith(color: onSurface.withValues(alpha: 0.70)), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      Expanded(child: Text(j.location, style: context.textStyles.bodySmall?.copyWith(color: onSurface.withOpacity(0.70)), maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ],
                   ),
                 ],
