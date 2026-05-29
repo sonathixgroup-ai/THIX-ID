@@ -52,7 +52,7 @@ class _JobDashboardPageState extends State<JobDashboardPage> {
         'skills': me?.skills ?? const [],
         'languages': me?.languages ?? const [],
       };
-      final ai = await _service.aiRecommendJobs(userProfile: profile, jobs: jobs, limit: 8);
+      final ai = await _service.aiRecommendJobs(userProfile: profile, jobs: jobs, limit: 8) ?? [];
       if (!mounted) return;
       setState(() {
         _saved = saved;
@@ -99,11 +99,7 @@ class _JobDashboardPageState extends State<JobDashboardPage> {
                   if (_loading)
                     const Expanded(child: Center(child: CircularProgressIndicator(color: LearningCyberColors.neonCyan)))
                   else if (_error != null)
-                    Expanded(
-                      child: Center(
-                        child: Text(_error!, style: context.textStyles.bodyLarge?.copyWith(color: LearningCyberColors.textDim)),
-                      ),
-                    )
+                    Expanded(child: Center(child: Text(_error!, style: context.textStyles.bodyLarge?.copyWith(color: LearningCyberColors.textDim))))
                   else
                     Expanded(
                       child: ListView(
@@ -113,12 +109,7 @@ class _JobDashboardPageState extends State<JobDashboardPage> {
                               children: [
                                 const Icon(Icons.verified_user_rounded, color: LearningCyberColors.success),
                                 const SizedBox(width: AppSpacing.sm),
-                                Expanded(
-                                  child: Text(
-                                    'Suivi candidatures, sauvegardes et recommandations AI',
-                                    style: context.textStyles.bodyMedium?.copyWith(color: LearningCyberColors.text, fontWeight: FontWeight.w800),
-                                  ),
-                                ),
+                                Expanded(child: Text('Suivi candidatures, sauvegardes et recommandations AI', style: context.textStyles.bodyMedium?.copyWith(color: LearningCyberColors.text, fontWeight: FontWeight.w800))),
                               ],
                             ),
                           ),
@@ -126,23 +117,18 @@ class _JobDashboardPageState extends State<JobDashboardPage> {
                           _SectionHeader(title: 'AI recommendations', icon: Icons.auto_awesome_rounded, action: null),
                           const SizedBox(height: AppSpacing.sm),
                           if (_aiRecs.isEmpty)
-                            _EmptyStateCard(label: 'Aucune recommandation (AI non configurée ou profil incomplet).')
+                            _EmptyStateCard(label: 'Aucune recommandation.')
                           else
                             ..._aiRecs.map((r) {
                               final id = (r['job_id'] ?? '').toString();
-                              final score = (r['score'] ?? '').toString();
-                              final reasons = (r['reasons'] is List) ? (r['reasons'] as List).take(2).join(' • ') : '';
-                              final risk = (r['fake_job_risk'] ?? '').toString();
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                                 child: _GlassTile(
                                   onTap: id.trim().isEmpty ? null : () => context.push('/jobs/$id'),
                                   leading: const Icon(Icons.work_rounded, color: LearningCyberColors.neonCyan),
                                   title: 'Job #$id',
-                                  subtitle: 'Score $score • Risk $risk\n$reasons',
-                                  trailing: _saved.contains(id)
-                                      ? const Icon(Icons.bookmark_rounded, color: LearningCyberColors.neonCyan)
-                                      : const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: LearningCyberColors.textDim),
+                                  subtitle: 'Score ${r['score'] ?? ''}',
+                                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: LearningCyberColors.textDim),
                                 ),
                               );
                             }),
@@ -155,29 +141,9 @@ class _JobDashboardPageState extends State<JobDashboardPage> {
                                 : Wrap(
                                     spacing: 10,
                                     runSpacing: 10,
-                                    children: _saved.take(24).map((id) => _NeonPill(label: id, onTap: () => context.push('/jobs/$id'))).toList(growable: false),
+                                    children: _saved.take(24).map((id) => _NeonPill(label: id, onTap: () => context.push('/jobs/$id'))).toList(),
                                   ),
                           ),
-                          const SizedBox(height: AppSpacing.lg),
-                          _SectionHeader(title: 'Applied jobs', icon: Icons.fact_check_rounded, action: Text('${_apps.length}', style: context.textStyles.labelLarge?.copyWith(color: LearningCyberColors.textDim))),
-                          const SizedBox(height: AppSpacing.sm),
-                          if (_apps.isEmpty)
-                            _EmptyStateCard(label: 'Aucune candidature trouvée.')
-                          else
-                            ..._apps.take(40).map((a) {
-                              final jobId = (a['job_id'] ?? '').toString();
-                              final st = (a['status'] ?? 'applied').toString();
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                                child: _GlassTile(
-                                  onTap: jobId.trim().isEmpty ? null : () => context.push('/jobs/$jobId'),
-                                  leading: const Icon(Icons.assignment_turned_in_rounded, color: LearningCyberColors.success),
-                                  title: 'Job #$jobId',
-                                  subtitle: 'Status: $st',
-                                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: LearningCyberColors.textDim),
-                                ),
-                              );
-                            }),
                         ],
                       ),
                     ),
@@ -191,67 +157,21 @@ class _JobDashboardPageState extends State<JobDashboardPage> {
   }
 }
 
-class _JobsBackground extends StatelessWidget {
-  const _JobsBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(gradient: LearningCyberGradients.background()),
-      child: Stack(
-        children: const [
-          _GlowBlob(color: LearningCyberColors.electricBlue, top: -80, left: -60, size: 240),
-          _GlowBlob(color: LearningCyberColors.neonCyan, top: 120, right: -80, size: 280),
-          _GlowBlob(color: LearningCyberColors.neonViolet, bottom: -120, left: 10, size: 320),
-        ],
-      ),
-    );
-  }
-}
-
-class _GlowBlob extends StatelessWidget {
-  final Color color;
-  final double? top;
-  final double? left;
-  final double? right;
-  final double? bottom;
-  final double size;
-  const _GlowBlob({required this.color, required this.size, this.top, this.left, this.right, this.bottom});
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: top,
-      left: left,
-      right: right,
-      bottom: bottom,
-      child: IgnorePointer(
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: color.withValues(alpha: 0.20)),
-        ),
-      ),
-    );
-  }
-}
+// --- Composants de design ---
 
 class _GlassPanel extends StatelessWidget {
   final Widget child;
   const _GlassPanel({required this.child});
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: LearningCyberColors.panel.withValues(alpha: 0.70),
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: LearningCyberColors.stroke.withValues(alpha: 0.9)),
-      ),
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: LearningCyberColors.panel.withOpacity(0.70),
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          border: Border.all(color: LearningCyberColors.stroke.withOpacity(0.9)),
+        ),
+        child: child,
+      );
 }
 
 class _GlassTile extends StatelessWidget {
@@ -263,48 +183,46 @@ class _GlassTile extends StatelessWidget {
   const _GlassTile({required this.onTap, required this.leading, required this.title, required this.subtitle, required this.trailing});
 
   @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      splashFactory: NoSplash.splashFactory,
-      highlightColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: LearningCyberColors.panelHi.withValues(alpha: 0.78),
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: LearningCyberColors.stroke.withValues(alpha: 0.8)),
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: LearningCyberColors.panelHi.withOpacity(0.78),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: LearningCyberColors.stroke.withOpacity(0.8)),
+          ),
+          child: Row(children: [leading, const SizedBox(width: AppSpacing.md), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title), Text(subtitle)])), trailing]),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                gradient: LearningCyberGradients.glowBlue(),
-              ),
-              alignment: Alignment.center,
-              child: leading,
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: context.textStyles.titleSmall?.copyWith(color: LearningCyberColors.text, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 4),
-                  Text(subtitle, style: context.textStyles.bodySmall?.copyWith(color: LearningCyberColors.textDim, height: 1.35)),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            trailing,
-          ],
+      );
+}
+
+class _NeonPill extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _NeonPill({required this.label, required this.onTap});
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: LearningCyberColors.neonCyan.withOpacity(0.65)),
+            color: LearningCyberColors.neonCyan.withOpacity(0.12),
+          ),
+          child: Text(label, style: context.textStyles.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
         ),
-      ),
-    );
-  }
+      );
+}
+
+class _JobsBackground extends StatelessWidget {
+  const _JobsBackground();
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(gradient: LearningCyberGradients.background()),
+        child: const Stack(children: []),
+      );
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -312,58 +230,13 @@ class _SectionHeader extends StatelessWidget {
   final IconData icon;
   final Widget? action;
   const _SectionHeader({required this.title, required this.icon, required this.action});
-
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: LearningCyberColors.neonCyan, size: 18),
-        const SizedBox(width: 8),
-        Expanded(child: Text(title, style: context.textStyles.titleMedium?.copyWith(color: LearningCyberColors.text, fontWeight: FontWeight.w900))),
-        if (action != null) action!,
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Row(children: [Icon(icon, color: LearningCyberColors.neonCyan), const SizedBox(width: 8), Text(title)]);
 }
 
 class _EmptyStateCard extends StatelessWidget {
   final String label;
   const _EmptyStateCard({required this.label});
-
   @override
-  Widget build(BuildContext context) {
-    return _GlassPanel(
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline_rounded, color: LearningCyberColors.textDim),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(child: Text(label, style: context.textStyles.bodyMedium?.copyWith(color: LearningCyberColors.textDim))),
-        ],
-      ),
-    );
-  }
-}
-
-class _NeonPill extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _NeonPill({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      splashFactory: NoSplash.splashFactory,
-      highlightColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: LearningCyberColors.neonCyan.withValues(alpha: 0.65)),
-          color: LearningCyberColors.neonCyan.withValues(alpha: 0.12),
-        ),
-        child: Text(label, style: context.textStyles.labelLarge?.copyWith(color: LearningCyberColors.text, fontWeight: FontWeight.w900)),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => _GlassPanel(child: Text(label));
 }
