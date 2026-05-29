@@ -105,4 +105,33 @@ class JobService {
       return false;
     }
   }
+
+  /// LISTE DES CANDIDATURES DU RECRUTEUR
+  Future<List<Map<String, dynamic>>> listRecruiterApplications({
+    required String recruiterUserId,
+  }) async {
+    try {
+      final response = await SupabaseService.select(
+        'job_applications',
+        select: '*',
+        filters: {
+          'recruiter_user_id': recruiterUserId,
+        },
+        orderBy: 'created_at',
+        ascending: false,
+      );
+
+      if (response == null) {
+        return [];
+      }
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint(
+        'Erreur listRecruiterApplications: $e',
+      );
+
+      return [];
+    }
+  }
 }
