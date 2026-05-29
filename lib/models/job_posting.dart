@@ -1,106 +1,101 @@
-import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:thix_id/models/job_application.dart';
-import 'package:thix_id/models/job_posting.dart';
+import 'dart:convert';
 
-class JobService {
-  final SupabaseClient _client = Supabase.instance.client;
-  static const String table = 'thix_job_offers';
+class JobPosting {
+  // ... (Gardez tous vos champs `final` ici, sans rien changer) ...
+  final String id;
+  final String? recruiterUserId;
+  final String? companyId;
+  final String title;
+  final String company;
+  final String? companyLogoUrl;
+  final bool isVerifiedEmployer;
+  final String location;
+  final String salary;
+  final int? salaryMin;
+  final int? salaryMax;
+  final String? salaryCurrency;
+  final String type;
+  final String? workMode;
+  final String? category;
+  final String? industry;
+  final String? experienceLevel;
+  final String description;
+  final List<String> requirements;
+  final List<String> skills;
+  final List<String> responsibilities;
+  final List<String> benefits;
+  final DateTime? deadline;
+  final String? status;
+  final int? applicantsCount;
+  final bool isFeatured;
+  final bool isSuggested;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
-  /// Récupère la liste complète des offres d'emploi
-  Future<List<JobPosting>> listJobs() async {
-    try {
-      final response = await _client
-          .from(table)
-          .select('*')
-          .order('created_at', ascending: false);
+  const JobPosting({
+    required this.id,
+    this.recruiterUserId,
+    this.companyId,
+    required this.title,
+    required this.company,
+    this.companyLogoUrl,
+    this.isVerifiedEmployer = false,
+    required this.location,
+    this.salary = 'Non spécifié',
+    this.salaryMin,
+    this.salaryMax,
+    this.salaryCurrency,
+    this.type = 'Offre',
+    this.workMode,
+    this.category,
+    this.industry,
+    this.experienceLevel,
+    this.description = '',
+    this.requirements = const [],
+    this.skills = const [],
+    this.responsibilities = const [],
+    this.benefits = const [],
+    this.deadline,
+    this.status = 'approved',
+    this.applicantsCount = 0,
+    this.isFeatured = false,
+    this.isSuggested = false,
+    required this.createdAt,
+    required this.updatedAt,
+  });
 
-      // On utilise votre méthode fromJson optimisée
-      return (response as List<dynamic>)
-          .map((json) => JobPosting.fromJson(json as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      debugPrint('JobService.listJobs error: $e');
-      return [];
-    }
-  }
-
-  /// Récupère les détails d'un job par son ID
-  Future<JobPosting?> fetchJob(String jobId) async {
-    try {
-      final data = await _client
-          .from(table)
-          .select('*')
-          .eq('id', jobId)
-          .single();
-          
-      return JobPosting.fromJson(data as Map<String, dynamic>);
-    } catch (e) {
-      debugPrint('JobService.fetchJob error: $e');
-      return null;
-    }
-  }
-
-  /// Récupère les IDs des jobs sauvegardés pour l'utilisateur actuel
-  Future<Set<String>> getSavedJobIdsRemote() async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) return {};
-
-    try {
-      final data = await _client
-          .from('saved_jobs')
-          .select('job_id')
-          .eq('user_id', userId);
-
-      return (data as List<dynamic>)
-          .map((e) => (e as Map<String, dynamic>)['job_id'] as String)
-          .toSet();
-    } catch (e) {
-      debugPrint('JobService.getSavedJobIdsRemote error: $e');
-      return {};
-    }
-  }
-
-  /// Ajoute/Supprime un job des favoris
-  Future<void> toggleSavedRemote({required String jobId, required bool save}) async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) throw Exception('Utilisateur non connecté');
-
-    try {
-      if (save) {
-        await _client.from('saved_jobs').insert({
-          'user_id': userId,
-          'job_id': jobId,
-        });
-      } else {
-        await _client
-            .from('saved_jobs')
-            .delete()
-            .eq('user_id', userId)
-            .eq('job_id', jobId);
-      }
-    } catch (e) {
-      debugPrint('JobService.toggleSavedRemote error: $e');
-      rethrow;
-    }
-  }
-
-  /// Soumet une nouvelle candidature
-  Future<void> submitApplication({
-    required String jobId,
-    required String applicantThixId,
-    String? message,
-  }) async {
-    try {
-      await _client.from('thix_job_applications').insert({
-        'job_id': jobId,
-        'applicant_thix_id': applicantThixId.trim().toUpperCase(),
-        'message': message?.trim(),
-        'created_at': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      debugPrint('JobService.submitApplication error: $e');
-      rethrow;
-    }
+  // C'EST CETTE MÉTHODE QUI RÉGLE VOS 321 ERREURS
+  factory JobPosting.fromJson(Map<String, dynamic> json) {
+    return JobPosting(
+      id: (json['id'] ?? '').toString(),
+      recruiterUserId: json['recruiter_user_id']?.toString(),
+      companyId: json['company_id']?.toString(),
+      title: (json['title'] ?? 'Sans titre').toString(),
+      company: (json['company'] ?? 'Entreprise inconnue').toString(),
+      companyLogoUrl: json['company_logo_url']?.toString(),
+      isVerifiedEmployer: (json['is_verified_employer'] ?? false) == true,
+      location: (json['location'] ?? 'Non spécifié').toString(),
+      salary: (json['salary'] ?? 'À négocier').toString(),
+      salaryMin: json['salary_min'] is int ? json['salary_min'] : null,
+      salaryMax: json['salary_max'] is int ? json['salary_max'] : null,
+      salaryCurrency: json['salary_currency']?.toString(),
+      type: (json['type'] ?? 'Offre').toString(),
+      workMode: json['work_mode']?.toString(),
+      category: json['category']?.toString(),
+      industry: json['industry']?.toString(),
+      experienceLevel: json['experience_level']?.toString(),
+      description: (json['description'] ?? '').toString(),
+      requirements: (json['requirements'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      skills: (json['skills'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      responsibilities: (json['responsibilities'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      benefits: (json['benefits'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      deadline: json['deadline'] != null ? DateTime.tryParse(json['deadline'].toString()) : null,
+      status: (json['status'] ?? 'approved').toString(),
+      applicantsCount: json['applicants_count'] is int ? json['applicants_count'] : 0,
+      isFeatured: (json['is_featured'] ?? false) == true,
+      isSuggested: (json['is_suggested'] ?? false) == true,
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? '') ?? DateTime.now(),
+    );
   }
 }
