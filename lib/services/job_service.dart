@@ -10,12 +10,15 @@ class JobService {
   /// Récupère la liste des jobs depuis Supabase
   Future<List<JobPosting>> listJobs() async {
     try {
-      final List<dynamic> response = await _client
+      final response = await _client
           .from(table)
           .select('*')
           .order('created_at', ascending: false);
 
-      return response.map((json) => JobPosting.fromJson(json)).toList();
+      // CORRECTION : Cast explicite pour éviter les erreurs de type
+      return (response as List<dynamic>)
+          .map((json) => JobPosting.fromJson(json as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       debugPrint('JobService.listJobs error: $e');
       return _getFallbackJobs();
@@ -26,7 +29,8 @@ class JobService {
   Future<JobPosting?> fetchJob(String jobId) async {
     try {
       final data = await _client.from(table).select('*').eq('id', jobId).single();
-      return JobPosting.fromJson(data);
+      // CORRECTION : Utilisation de fromJson
+      return JobPosting.fromJson(data as Map<String, dynamic>);
     } catch (e) {
       debugPrint('JobService.fetchJob error: $e');
       return null;
@@ -49,6 +53,7 @@ class JobService {
 
       await _client.from('thix_job_applications').insert(data);
       
+      // Note : Assurez-vous que JobApplication a aussi un .fromJson()
       return JobApplication.fromJson(data);
     } catch (e) {
       debugPrint('JobService.submitApplication error: $e');
@@ -56,19 +61,18 @@ class JobService {
     }
   }
 
-  /// Données de secours si la connexion échoue
+  /// Données de secours sécurisées (n'utilise plus le constructeur directement)
   List<JobPosting> _getFallbackJobs() {
     return [
-      JobPosting(
-        id: 'job_fallback_001',
-        title: 'Directeur des Opérations',
-        company: 'Kamoto Copper Company',
-        location: 'Kolwezi',
-        status: 'approved',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        // Remplissez les autres champs nécessaires ici selon votre modèle
-      ),
+      JobPosting.fromJson({
+        'id': 'job_fallback_001',
+        'title': 'Directeur des Opérations',
+        'company': 'Kamoto Copper Company',
+        'location': 'Kolwezi',
+        'status': 'approved',
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }),
     ];
   }
 }
