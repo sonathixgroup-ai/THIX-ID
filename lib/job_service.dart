@@ -134,4 +134,79 @@ class JobService {
       return [];
     }
   }
+  /// JOBS SAUVEGARDÉS
+  Future<Set<String>> getSavedJobIdsRemote() async {
+    try {
+      final response = await SupabaseService.select(
+        'saved_jobs',
+        select: '*',
+      );
+
+      if (response == null) {
+        return {};
+      }
+
+      return (response as List)
+          .map(
+            (e) => (e['job_id'] ?? '').toString(),
+          )
+          .toSet();
+    } catch (e) {
+      debugPrint('Erreur getSavedJobIdsRemote: $e');
+      return {};
+    }
+  }
+
+  /// MES CANDIDATURES DISTANTES
+  Future<List<Map<String, dynamic>>> listMyApplicationsRemote() async {
+    try {
+      final response = await SupabaseService.select(
+        'job_applications',
+        select: '*',
+        orderBy: 'created_at',
+        ascending: false,
+      );
+
+      if (response == null) {
+        return [];
+      }
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('Erreur listMyApplicationsRemote: $e');
+      return [];
+    }
+  }
+
+  /// CANDIDATURES LOCALES
+  Future<List<JobPosting>> listLocalApplications() async {
+    try {
+      return [];
+    } catch (e) {
+      debugPrint('Erreur listLocalApplications: $e');
+      return [];
+    }
+  }
+
+  /// RECOMMANDATION AI
+  Future<List<Map<String, dynamic>>?> aiRecommendJobs({
+    required Map<String, dynamic> userProfile,
+    required List<JobPosting> jobs,
+    int limit = 8,
+  }) async {
+    try {
+      return jobs.take(limit).map((job) {
+        return {
+          'job_id': job.id,
+          'title': job.title,
+          'company': job.company,
+          'location': job.location,
+          'salary': job.salary,
+        };
+      }).toList();
+    } catch (e) {
+      debugPrint('Erreur aiRecommendJobs: $e');
+      return [];
+    }
+  }
 }
