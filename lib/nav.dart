@@ -44,8 +44,8 @@ import 'package:thix_id/presentation/thix_market/thix_market_page.dart';
 import 'package:thix_id/presentation/thix_sante/thix_sante_page.dart';
 import 'package:thix_id/presentation/thix_reservation/thix_reservation_page.dart';
 import 'package:thix_id/presentation/thix_money/thix_money_page.dart';
-import 'package:thix_id/presentation/thix_incubator/incubator_page.dart';
-import 'package:thix_id/presentation/thix_media/thix_media_page.dart';
+import 'package:thix_id/presentation/thix_media/thix_media_page.dart'; // ✅ THIX MEDIA
+
 class AppRouter {
   static GoRouter create(AuthController auth, {Listenable? extraRefreshListenable}) {
     final refresh = extraRefreshListenable == null ? auth : Listenable.merge([auth, extraRefreshListenable]);
@@ -255,19 +255,31 @@ class AppRouter {
         GoRoute(
           path: AppRoutes.thixMarket,
           name: 'thixMarket',
-          builder: (context, state) => const ThixMarketPage(),
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixMarketPage()),
         ),
         // ==================== THIX SANTÉ ====================
         GoRoute(
           path: AppRoutes.thixSante,
           name: 'thixSante',
-          builder: (context, state) => const ThixSantePage(),
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixSantePage()),
+        ),
+        // ==================== THIX MONEY ====================
+        GoRoute(
+          path: AppRoutes.thixMoney,
+          name: 'thixMoney',
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixMoneyPage()),
+        ),
+        // ==================== THIX MEDIA (remplace Incubateur) ====================
+        GoRoute(
+          path: AppRoutes.thixMedia,
+          name: 'thixMedia',
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixMediaPage()),
         ),
         // ==================== RÉSERVATION ====================
         GoRoute(
           path: AppRoutes.reservation,
           name: 'reservation',
-          builder: (context, state) => const ThixReservationPage(),
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixReservationPage()),
         ),
         GoRoute(
           path: AppRoutes.jobs,
@@ -290,13 +302,6 @@ class AppRouter {
             child: RecruiterPortalPage(),
           ),
         ),
-        GoRoute(
-  path: AppRoutes.thixMoney,
-  name: 'thixMoney',
-  pageBuilder: (context, state) => NoTransitionPage(
-    child: const ThixMoneyPage(),
-  ),
-),
         GoRoute(
           path: AppRoutes.opportunities,
           name: 'opportunities',
@@ -384,11 +389,6 @@ class AppRouter {
           ),
         ),
         GoRoute(
-  path: '/thix-media',
-  builder: (context, state) => const ThixMediaPage(),
-),
-),
-        GoRoute(
           path: AppRoutes.trainingHome,
           name: 'trainingHome',
           pageBuilder: (context, state) => const NoTransitionPage(child: TrainingHomePage()),
@@ -464,10 +464,10 @@ class AppRoutes {
   static const String admin = '/admin';
   static const String thixMarket = '/market';
   static const String thixSante = '/sante';
-  static const String reservation = '/reservation'; // AJOUT
+  static const String reservation = '/reservation';
   static String get thixMoney => '/thix-money';
   static String get thixMedia => '/thix-media';
-  static String get incubator => '/incubator';
+  // static String get incubator => '/incubator'; // ❌ supprimé (remplacé par thixMedia)
 }
 
 extension GoRouterBackHelpers on BuildContext {
