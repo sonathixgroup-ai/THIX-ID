@@ -1,11 +1,9 @@
-// lib/presentation/admin/admin_media_page.dart
-import 'dart:io';
+// lib/presentation/admin/pages/admin_media_page.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:file_picker/file_picker.dart';
-import '../../models/media_content.dart';
-import '../../services/media_service.dart';
-import '../../app_router.dart';
+import '../../../models/media_content.dart';
+import '../../../services/media_service.dart';
+import '../../../app_router.dart';
 
 class AdminMediaPage extends StatefulWidget {
   const AdminMediaPage({super.key});
@@ -20,7 +18,6 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
   bool _isLoading = true;
   String? _error;
 
-  // Pour le formulaire d’ajout / modification
   bool _isEditing = false;
   MediaContent? _editingItem;
   final _formKey = GlobalKey<FormState>();
@@ -37,10 +34,6 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
   bool _isRecommended = false;
   bool _isPublished = true;
 
-  // Pour upload de fichiers locaux (optionnel)
-  File? _selectedCoverFile;
-  File? _selectedVideoFile;
-
   @override
   void initState() {
     super.initState();
@@ -51,7 +44,7 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
   Future<void> _loadMedia() async {
     setState(() => _isLoading = true);
     try {
-      final all = await _mediaService.fetchAllMedia(); // à ajouter dans MediaService
+      final all = await _mediaService.fetchAllMedia();
       setState(() {
         _media = all;
         _isLoading = false;
@@ -68,7 +61,6 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
     if (!_formKey.currentState!.validate()) return;
     try {
       if (_isEditing && _editingItem != null) {
-        // Mise à jour
         final updated = _editingItem!.copyWith(
           title: _titleController.text,
           subtitle: _subtitleController.text,
@@ -86,7 +78,6 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
         );
         await _mediaService.update(updated);
       } else {
-        // Création
         final newItem = MediaContent(
           id: '',
           title: _titleController.text,
@@ -108,13 +99,17 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
       }
       _resetForm();
       await _loadMedia();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Média sauvegardé !')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Média sauvegardé !')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur : $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e')),
+        );
+      }
     }
   }
 
@@ -134,13 +129,17 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
     try {
       await _mediaService.deleteMedia(item);
       await _loadMedia();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Supprimé !')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Supprimé !')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur suppression : $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur suppression : $e')),
+        );
+      }
     }
   }
 
@@ -177,8 +176,6 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
     _isNewRelease = false;
     _isRecommended = false;
     _isPublished = true;
-    _selectedCoverFile = null;
-    _selectedVideoFile = null;
   }
 
   void _showForm() {
@@ -243,19 +240,22 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
       return Scaffold(body: Center(child: Text('Erreur : $_error')));
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Administration THIX MEDIA'), actions: [
-        IconButton(
-          icon: const Icon(Icons.add),
-          onPressed: () {
-            _resetForm();
-            _showForm();
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.refresh),
-          onPressed: _loadMedia,
-        ),
-      ]),
+      appBar: AppBar(
+        title: const Text('Administration THIX MEDIA'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () {
+              _resetForm();
+              _showForm();
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadMedia,
+          ),
+        ],
+      ),
       body: ListView.builder(
         itemCount: _media.length,
         itemBuilder: (context, index) {
