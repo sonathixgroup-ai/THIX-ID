@@ -6,8 +6,7 @@ import 'package:go_router/go_router.dart'; // pour context.go
 import 'video_player_page.dart';
 import '../../models/media_content.dart';
 import '../../services/media_service.dart';
-import '../../../app_router.dart'; // chemin correct vers app_router.dart (à adapter si besoin)
-
+import '../../app_router.dart'; // ✅ chemin corrigé (deux niveaux)
 // Couleurs
 const Color kBackgroundColor = Color(0xFFFBFBFD);
 const Color kAccentColor = Color(0xFF7A4DF3);
