@@ -1,7 +1,7 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // ← ajout
 import 'package:thix_id/models/event_item.dart';
 import 'package:thix_id/services/event_service.dart';
 import 'package:thix_id/theme.dart';
@@ -11,8 +11,9 @@ class EventsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final service = EventService(Supabase.instance.client);
+    final service = EventService(Supabase.instance.client); // ← correction ligne 14
     return Scaffold(
+      // ... le reste du Scaffold ...
       backgroundColor: context.theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
@@ -245,64 +246,67 @@ class EventsPage extends StatelessWidget {
   }
 
   Widget _buildUpcomingEventsSection(BuildContext context, EventService service) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "Prochains Événements",
-              style: context.textStyles.titleLarge?.copyWith(
-                color: context.theme.colorScheme.onSurface,
-              ),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            "Prochains Événements",
+            style: context.textStyles.titleLarge?.copyWith(
+              color: context.theme.colorScheme.onSurface,
             ),
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: context.theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: context.theme.dividerColor),
-              ),
-              child: const Icon(Icons.swap_vert_rounded, color: LightModeColors.secondaryText, size: 20),
+          ),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: context.theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: context.theme.dividerColor),
             ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        FutureBuilder<List<EventItem>>(
-          future: service.getUpcomingEvents(limit: 10), // ✅ remplacé listEvents
-          builder: (context, snap) {
-            final events = snap.data ?? const [];
-            if (snap.connectionState != ConnectionState.done) {
-              return const Padding(
-                padding: EdgeInsets.only(top: AppSpacing.xl),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            if (events.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.xl),
-                child: Text('Aucun événement pour le moment.', style: context.textStyles.bodyMedium?.copyWith(color: LightModeColors.secondaryText)),
-              );
-            }
-
-            return Column(
-              children: events.map((e) => EventCard(
-                title: e.title,
-                date: _formatDate(e.eventDate), // ✅ calcul depuis eventDate
-                location: e.location,
-                price: event.price?.toString() ?? 'Gratuit',
-                category: e.category,
-                attendees: _formatAttendees(e), // ✅ généré
-                imageAssetPath: null, // ou e.imageUrl si disponible
-                onOpen: () => context.push('/events/${e.id}'),
-              )).toList(growable: false),
+            child: const Icon(Icons.swap_vert_rounded,
+                color: LightModeColors.secondaryText, size: 20),
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      FutureBuilder<List<EventItem>>(
+        future: service.getUpcomingEvents(limit: 10),
+        builder: (context, snap) {
+          final events = snap.data ?? const [];
+          if (snap.connectionState != ConnectionState.done) {
+            return const Padding(
+              padding: EdgeInsets.only(top: AppSpacing.xl),
+              child: Center(child: CircularProgressIndicator()),
             );
-          },
-        ),
-      ],
-    );
-  }
+          }
+          if (events.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xl),
+              child: Text('Aucun événement pour le moment.',
+                  style: context.textStyles.bodyMedium
+                      ?.copyWith(color: LightModeColors.secondaryText)),
+            );
+          }
+
+          return Column(
+            children: events.map((e) => EventCard(
+              title: e.title,
+              date: _formatDate(e.eventDate),
+              location: e.location,
+              price: e.price?.toString() ?? 'Gratuit', // ← corrigé : e au lieu de event
+              category: e.category,
+              attendees: _formatAttendees(e),
+              imageAssetPath: null,
+              onOpen: () => context.push('/events/${e.id}'),
+            )).toList(growable: false),
+          );
+        },
+      ),
+    ],
+  );
+}
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
