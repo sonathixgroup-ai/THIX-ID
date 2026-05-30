@@ -11,7 +11,7 @@ class EventsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final service = EventService();
+    final service = EventService(Supabase.instance.client);
     return Scaffold(
       backgroundColor: context.theme.scaffoldBackgroundColor,
       body: SafeArea(
@@ -291,7 +291,7 @@ class EventsPage extends StatelessWidget {
                 title: e.title,
                 date: _formatDate(e.eventDate), // ✅ calcul depuis eventDate
                 location: e.location,
-                price: e.price,
+                price: event.price?.toString() ?? 'Gratuit',
                 category: e.category,
                 attendees: _formatAttendees(e), // ✅ généré
                 imageAssetPath: null, // ou e.imageUrl si disponible
@@ -653,7 +653,7 @@ class _FeaturedEventCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppRadius.full),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
                 ),
-                child: Text(event.price, style: context.textStyles.labelSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+                child: Text(event.price?.toString() ?? 'Gratuit', style: context.textStyles.labelSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
               ),
             ),
             Positioned(
