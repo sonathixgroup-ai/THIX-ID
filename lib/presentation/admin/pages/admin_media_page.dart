@@ -1,9 +1,9 @@
-// lib/presentation/admin/pages/admin_media_page.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../models/media_content.dart';
 import '../../../services/media_service.dart';
-import '../../../app_router.dart';
 
 class AdminMediaPage extends StatefulWidget {
   const AdminMediaPage({super.key});
@@ -34,6 +34,10 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
   bool _isRecommended = false;
   bool _isPublished = true;
 
+  // Fichiers locaux pour upload
+  File? _selectedCoverFile;
+  File? _selectedVideoFile;
+
   @override
   void initState() {
     super.initState();
@@ -57,27 +61,38 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
     }
   }
 
+  Future<void> _pickCoverFile() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _selectedCoverFile = File(result.files.single.path!);
+        _coverUrlController.text = _selectedCoverFile!.path; // affichage temporaire
+      });
+    }
+  }
+
+  Future<void> _pickVideoFile() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.video);
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _selectedVideoFile = File(result.files.single.path!);
+        _videoUrlController.text = _selectedVideoFile!.path;
+      });
+    }
+  }
+
   Future<void> _saveMedia() async {
     if (!_formKey.currentState!.validate()) return;
     try {
       if (_isEditing && _editingItem != null) {
-        final updated = _editingItem!.copyWith(
-          title: _titleController.text,
-          subtitle: _subtitleController.text,
-          type: _typeController.text,
-          year: _yearController.text,
-          coverUrl: _coverUrlController.text,
-          videoUrl: _videoUrlController.text,
-          viewCount: int.tryParse(_viewCountController.text) ?? 0,
-          rankPosition: _rankPositionController.text.isNotEmpty ? int.parse(_rankPositionController.text) : null,
-          isTrending: _isTrending,
-          isNewRelease: _isNewRelease,
-          isRecommended: _isRecommended,
-          isPublished: _isPublished,
-          updatedAt: DateTime.now(),
+        // Mise à jour avec remplacement éventuel de fichiers
+        await _mediaService.updateWithFiles(
+          _editingItem!,
+          newCoverFile: _selectedCoverFile,
+          newVideoFile: _selectedVideoFile,
         );
-        await _mediaService.update(updated);
       } else {
+        // Nouveau média avec upload
         final newItem = MediaContent(
           id: '',
           title: _titleController.text,
@@ -95,7 +110,8 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
-        await _mediaService.insert(newItem);
+        await _mediaService.insertWithFiles(newItem,
+            coverFile: _selectedCoverFile, videoFile: _selectedVideoFile);
       }
       _resetForm();
       await _loadMedia();
@@ -158,6 +174,8 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
     _isNewRelease = item.isNewRelease;
     _isRecommended = item.isRecommended;
     _isPublished = item.isPublished;
+    _selectedCoverFile = null;
+    _selectedVideoFile = null;
     _showForm();
   }
 
@@ -176,6 +194,8 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
     _isNewRelease = false;
     _isRecommended = false;
     _isPublished = true;
+    _selectedCoverFile = null;
+    _selectedVideoFile = null;
   }
 
   void _showForm() {
@@ -205,10 +225,28 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
                 TextFormField(controller: _typeController, decoration: const InputDecoration(labelText: 'Type (Musique, Film...) *'),
                     validator: (v) => v == null || v.isEmpty ? 'Requis' : null),
                 TextFormField(controller: _yearController, decoration: const InputDecoration(labelText: 'Année')),
-                TextFormField(controller: _coverUrlController, decoration: const InputDecoration(labelText: 'URL de couverture *'),
-                    validator: (v) => v == null || v.isEmpty ? 'Requis' : null),
-                TextFormField(controller: _videoUrlController, decoration: const InputDecoration(labelText: 'URL de la vidéo *'),
-                    validator: (v) => v == null || v.isEmpty ? 'Requis' : null),
+                // Choix du fichier image
+                ListTile(
+                  leading: const Icon(Icons.image),
+                  title: Text(_selectedCoverFile == null ? 'Aucun fichier image' : _selectedCoverFile!.path.split('/').last),
+                  trailing: ElevatedButton(
+                    onPressed: _pickCoverFile,
+                    child: const Text('Choisir image'),
+                  ),
+                ),
+                // Champ URL manuel (fallback)
+                TextFormField(controller: _coverUrlController, decoration: const InputDecoration(labelText: 'URL de couverture (si pas de fichier)')),
+                // Choix du fichier vidéo
+                ListTile(
+                  leading: const Icon(Icons.video_file),
+                  title: Text(_selectedVideoFile == null ? 'Aucun fichier vidéo' : _selectedVideoFile!.path.split('/').last),
+                  trailing: ElevatedButton(
+                    onPressed: _pickVideoFile,
+                    child: const Text('Choisir vidéo'),
+                  ),
+                ),
+                TextFormField(controller: _videoUrlController, decoration: const InputDecoration(labelText: 'URL vidéo (si pas de fichier)'),
+                    validator: (v) => (v == null || v.isEmpty) && _selectedVideoFile == null ? 'Fichier ou URL requis' : null),
                 TextFormField(controller: _viewCountController, decoration: const InputDecoration(labelText: 'Nombre de vues'),
                     keyboardType: TextInputType.number),
                 TextFormField(controller: _rankPositionController, decoration: const InputDecoration(labelText: 'Position dans tendances (1,2,3...)'),
