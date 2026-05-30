@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:thix_id/auth/auth_controller.dart';
+import 'package:thix_id/models/app_user.dart';
 import 'package:thix_id/presentation/home/home_page.dart';
 import 'package:thix_id/presentation/auth/login_page.dart';
 import 'package:thix_id/presentation/auth/personal_registration_page.dart';
@@ -41,7 +42,7 @@ import 'package:thix_id/presentation/thix_sante/thix_sante_page.dart';
 import 'package:thix_id/presentation/thix_reservation/thix_reservation_page.dart';
 import 'package:thix_id/presentation/thix_money/thix_money_page.dart';
 import 'package:thix_id/presentation/thix_media/thix_media_page.dart';
-import 'package:thix_id/presentation/admin/pages/admin_media_page.dart'; // import admin media
+import 'package:thix_id/presentation/admin/pages/admin_media_page.dart';
 
 class AppRoutes {
   static const String home = '/';
@@ -75,9 +76,9 @@ class AppRoutes {
   static const String reservation = '/reservation';
   static const String thixMoney = '/thix-money';
   static const String thixMedia = '/thix-media';
-  static const String adminMedia = '/admin/media'; // nouvelle route
+  static const String adminMedia = '/admin/media';
 
-  static String enterprisePortalBase(String slug) => '${enterprisePortalBasePath}/$slug';
+  static String enterprisePortalBase(String slug) => '$enterprisePortalBasePath/$slug';
   static String enterprisePortalDashboard(String slug, String section) => '/company/$slug/dashboard/$section';
 }
 
@@ -88,19 +89,345 @@ class AppRouter {
       initialLocation: AppRoutes.home,
       refreshListenable: refresh,
       redirect: (context, state) {
-        // ... votre logique de redirection existante ...
-        // (gardez votre code actuel, je ne le modifie pas)
+        final location = state.matchedLocation;
+        final isLoggedIn = auth.isAuthenticated;
+        final isAuthPage = location == AppRoutes.login ||
+            location == AppRoutes.personalReg ||
+            location == AppRoutes.enterpriseReg;
+        final isAdmin = location == AppRoutes.admin || location.startsWith('${AppRoutes.admin}/');
+        final isEnterprisePortal = location.startsWith('${AppRoutes.enterprisePortalBasePath}/') ||
+            location == AppRoutes.enterprisePortalBasePath;
+        final isPublic = location == AppRoutes.home ||
+            location == AppRoutes.publicProfile ||
+            location == AppRoutes.jobs ||
+            location == AppRoutes.opportunities ||
+            location == AppRoutes.events ||
+            location == AppRoutes.education ||
+            location == AppRoutes.trainingHome ||
+            location.startsWith('${AppRoutes.trainingDetailsBasePath}/');
+
+        final isProtected = !isPublic && !isAuthPage;
+        if (!isLoggedIn && isProtected) return AppRoutes.login;
+
+        if (isAdmin && !isLoggedIn) return AppRoutes.login;
+
+        if (isLoggedIn) {
+          final u = auth.currentUser;
+          final isActivated = (u?.hasRealThixId ?? false);
+          final hasActiveTrial = (u?.hasActiveTrial ?? false);
+          final isPaymentOrReceipt = location == AppRoutes.payment || location == AppRoutes.activationReceipt;
+          final isDashboard = location == AppRoutes.userDashboard || location == AppRoutes.enterpriseDashboard;
+          if (!isActivated && !hasActiveTrial && !isAuthPage && !isPublic && !isPaymentOrReceipt && !isDashboard) {
+            final receiptReturn = Uri.encodeComponent(AppRoutes.activationReceipt);
+            return '${AppRoutes.payment}?returnTo=$receiptReturn';
+          }
+        }
+
+        if (isLoggedIn) {
+          final t = auth.currentUser?.accountType;
+          if (location == AppRoutes.userDashboard && t == AccountType.enterprise) return AppRoutes.enterpriseDashboard;
+          if (location == AppRoutes.enterpriseDashboard && t == AccountType.personal) return AppRoutes.userDashboard;
+        }
+
+        if (isLoggedIn && isAuthPage) {
+          final t = auth.currentUser?.accountType;
+          return t == AccountType.enterprise ? AppRoutes.enterpriseDashboard : AppRoutes.userDashboard;
+        }
+
         return null;
       },
       routes: [
-        // ... toutes vos routes existantes ...
-        // Ajoutez la route admin media :
+        GoRoute(
+          path: AppRoutes.home,
+          name: 'home',
+          pageBuilder: (context, state) => const NoTransitionPage(child: HomePagePremium()),
+        ),
+        GoRoute(
+          path: AppRoutes.login,
+          name: 'login',
+          pageBuilder: (context, state) => const NoTransitionPage(child: LoginPage()),
+        ),
+        GoRoute(
+          path: AppRoutes.personalReg,
+          name: 'personalReg',
+          pageBuilder: (context, state) {
+            final stepStr = state.uri.queryParameters['step'];
+            final step = int.tryParse(stepStr ?? '') ?? 1;
+            return NoTransitionPage(child: PersonalRegistrationPage(initialStep: step));
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.enterpriseReg,
+          name: 'enterpriseReg',
+          pageBuilder: (context, state) => const NoTransitionPage(child: EnterpriseRegistrationPage()),
+        ),
+        GoRoute(
+          path: AppRoutes.payment,
+          name: 'payment',
+          pageBuilder: (context, state) {
+            final returnTo = state.uri.queryParameters['returnTo'];
+            return NoTransitionPage(child: PaymentGatewayPage(returnTo: returnTo));
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.activationReceipt,
+          name: 'activationReceipt',
+          pageBuilder: (context, state) {
+            final qp = state.uri.queryParameters;
+            final paidAt = DateTime.tryParse((qp['paidAt'] ?? '').trim());
+            return NoTransitionPage(
+              child: ActivationReceiptPage(
+                txRef: qp['txRef'],
+                method: qp['method'],
+                amount: qp['amount'],
+                currency: qp['currency'],
+                paidAt: paidAt,
+              ),
+            );
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.publicProfile,
+          name: 'publicProfile',
+          pageBuilder: (context, state) => NoTransitionPage(
+            child: PublicProfilePage(initialThixId: state.uri.queryParameters['thixId']),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.userDashboard,
+          name: 'userDashboard',
+          pageBuilder: (context, state) => const NoTransitionPage(child: UserDashboardPage()),
+        ),
+        GoRoute(
+          path: AppRoutes.enterpriseDashboard,
+          name: 'enterpriseDashboard',
+          pageBuilder: (context, state) => const NoTransitionPage(child: EnterpriseDashboardPage()),
+        ),
+        GoRoute(
+          path: AppRoutes.enterprise,
+          name: 'enterpriseEntry',
+          redirect: (context, state) {
+            final isLoggedIn = auth.isAuthenticated;
+            if (!isLoggedIn) return AppRoutes.login;
+            final t = auth.currentUser?.accountType;
+            if (t == AccountType.enterprise) return AppRoutes.enterpriseDashboard;
+            return AppRoutes.enterpriseReg;
+          },
+        ),
+        GoRoute(
+          path: '/entreprise/:slug',
+          name: 'enterprisePortalAliasFr',
+          redirect: (context, state) {
+            final slug = (state.pathParameters['slug'] ?? '').trim();
+            return '${AppRoutes.enterprisePortalBase(slug)}/dashboard/overview';
+          },
+        ),
+        GoRoute(
+          path: '${AppRoutes.enterprisePortalBasePath}/:slug',
+          name: 'enterprisePortal',
+          pageBuilder: (context, state) {
+            final slug = (state.pathParameters['slug'] ?? '').trim();
+            return NoTransitionPage(child: EnterprisePortalPage(companySlug: slug));
+          },
+          routes: [
+            GoRoute(
+              path: 'dashboard/:section',
+              name: 'enterprisePortalDashboard',
+              pageBuilder: (context, state) {
+                final slug = (state.pathParameters['slug'] ?? '').trim();
+                final section = (state.pathParameters['section'] ?? 'overview').trim();
+                return NoTransitionPage(child: EnterpriseDashboardShellPage(companySlug: slug, section: section));
+              },
+            ),
+            GoRoute(
+              path: 'dashboard',
+              name: 'enterprisePortalDashboardRoot',
+              redirect: (context, state) {
+                final slug = (state.pathParameters['slug'] ?? '').trim();
+                return '${AppRoutes.enterprisePortalBase(slug)}/dashboard/overview';
+              },
+            ),
+          ],
+        ),
+        GoRoute(
+          path: AppRoutes.chat,
+          name: 'chat',
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixChatPage()),
+        ),
+        GoRoute(
+          path: AppRoutes.vault,
+          name: 'vault',
+          pageBuilder: (context, state) => const NoTransitionPage(child: DocumentVaultPage()),
+        ),
+        GoRoute(
+          path: AppRoutes.settings,
+          name: 'settings',
+          pageBuilder: (context, state) => const NoTransitionPage(child: SettingsPage()),
+        ),
+        GoRoute(
+          path: AppRoutes.network,
+          name: 'network',
+          pageBuilder: (context, state) => const NoTransitionPage(child: NetworkPage()),
+        ),
+        // THIX MARKET
+        GoRoute(
+          path: AppRoutes.thixMarket,
+          name: 'thixMarket',
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixMarketPage()),
+        ),
+        // THIX SANTÉ
+        GoRoute(
+          path: AppRoutes.thixSante,
+          name: 'thixSante',
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixSantePage()),
+        ),
+        // RÉSERVATION
+        GoRoute(
+          path: AppRoutes.reservation,
+          name: 'reservation',
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixReservationPage()),
+        ),
+        // THIX MONEY
+        GoRoute(
+          path: AppRoutes.thixMoney,
+          name: 'thixMoney',
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixMoneyPage()),
+        ),
+        // THIX MEDIA (public)
+        GoRoute(
+          path: AppRoutes.thixMedia,
+          name: 'thixMedia',
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixMediaPage()),
+        ),
+        // EMPLOIS
+        GoRoute(
+          path: AppRoutes.jobs,
+          name: 'jobs',
+          pageBuilder: (context, state) => const NoTransitionPage(child: JobsPage()),
+        ),
+        GoRoute(
+          path: AppRoutes.jobDashboard,
+          name: 'jobDashboard',
+          pageBuilder: (context, state) => const NoTransitionPage(child: JobDashboardPage()),
+        ),
+        GoRoute(
+          path: AppRoutes.recruiter,
+          name: 'recruiter',
+          pageBuilder: (context, state) => const NoTransitionPage(child: RecruiterPortalPage()),
+        ),
+        // OPPORTUNITÉS
+        GoRoute(
+          path: AppRoutes.opportunities,
+          name: 'opportunities',
+          pageBuilder: (context, state) => const NoTransitionPage(child: OpportunitiesPage()),
+        ),
+        GoRoute(
+          path: '/opportunities/:opportunityId',
+          name: 'opportunityDetails',
+          pageBuilder: (context, state) {
+            final opportunityId = state.pathParameters['opportunityId'] ?? '';
+            final applied = (state.uri.queryParameters['applied'] ?? '').trim() == '1';
+            return NoTransitionPage(child: OpportunityDetailsPage(opportunityId: opportunityId, applied: applied));
+          },
+        ),
+        GoRoute(
+          path: '/opportunities/:opportunityId/apply',
+          name: 'opportunityApply',
+          pageBuilder: (context, state) {
+            final opportunityId = state.pathParameters['opportunityId'] ?? '';
+            return NoTransitionPage(child: OpportunityApplyPage(opportunityId: opportunityId));
+          },
+        ),
+        // ÉVÉNEMENTS
+        GoRoute(
+          path: AppRoutes.events,
+          name: 'events',
+          pageBuilder: (context, state) => const NoTransitionPage(child: EventsPage()),
+        ),
+        GoRoute(
+          path: '/events/:eventId',
+          name: 'eventDetails',
+          pageBuilder: (context, state) {
+            final eventId = state.pathParameters['eventId'] ?? '';
+            final registered = (state.uri.queryParameters['registered'] ?? '').trim() == '1';
+            return NoTransitionPage(child: EventDetailsPage(eventId: eventId, registered: registered));
+          },
+        ),
+        GoRoute(
+          path: '/events/:eventId/register',
+          name: 'eventRegister',
+          pageBuilder: (context, state) {
+            final eventId = state.pathParameters['eventId'] ?? '';
+            return NoTransitionPage(child: EventRegisterPage(eventId: eventId));
+          },
+        ),
+        GoRoute(
+          path: '/events/:eventId/ticket/:registrationId',
+          name: 'eventTicket',
+          pageBuilder: (context, state) {
+            final eventId = state.pathParameters['eventId'] ?? '';
+            final registrationId = state.pathParameters['registrationId'] ?? '';
+            return NoTransitionPage(child: EventTicketPage(eventId: eventId, registrationId: registrationId));
+          },
+        ),
+        GoRoute(
+          path: '/events/me',
+          name: 'userEventsDashboard',
+          pageBuilder: (context, state) => const NoTransitionPage(child: UserEventDashboardPage()),
+        ),
+        // ÉDUCATION
+        GoRoute(
+          path: AppRoutes.education,
+          name: 'education',
+          pageBuilder: (context, state) => const NoTransitionPage(child: EducationPage()),
+        ),
+        // FORMATIONS
+        GoRoute(
+          path: AppRoutes.trainingHome,
+          name: 'trainingHome',
+          pageBuilder: (context, state) => const NoTransitionPage(child: TrainingHomePage()),
+        ),
+        GoRoute(
+          path: '${AppRoutes.trainingDetailsBasePath}/:trainingId',
+          name: 'trainingDetails',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['trainingId'] ?? '';
+            return NoTransitionPage(child: TrainingDetailsPage(trainingId: id));
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.learningDashboard,
+          name: 'learningDashboard',
+          pageBuilder: (context, state) => const NoTransitionPage(child: LearningDashboardPage()),
+        ),
+        GoRoute(
+          path: '${AppRoutes.lessonPlayer}/:enrollmentId',
+          name: 'lessonPlayer',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['enrollmentId'] ?? '';
+            return NoTransitionPage(child: LessonPlayerPage(enrollmentId: id));
+          },
+        ),
+        // ADMIN
+        GoRoute(
+          path: '${AppRoutes.admin}/:module',
+          name: 'admin',
+          pageBuilder: (context, state) {
+            final module = AdminModuleX.fromSlug(state.pathParameters['module']);
+            return NoTransitionPage(child: AdminPage(module: module));
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.admin,
+          name: 'adminRoot',
+          redirect: (_, __) => '${AppRoutes.admin}/${AdminModule.overview.slug}',
+        ),
+        // ADMIN MÉDIA (NOUVEAU)
         GoRoute(
           path: AppRoutes.adminMedia,
           name: 'adminMedia',
           pageBuilder: (context, state) => const NoTransitionPage(child: AdminMediaPage()),
         ),
-        // N'oubliez pas de conserver toutes vos autres routes (home, login, etc.)
       ],
     );
   }
