@@ -58,7 +58,15 @@ class PushNotificationService {
 
   Future<void> _requestPermission() async {
     try {
-      await _messaging.requestPermission(alert: true, announcement: false, badge: true, carPlay: false, criticalAlert: true, provisional: false, sound: true);
+      await _messaging.requestPermission(
+        alert: true,
+        announcement: false,
+        badge: true,
+        carPlay: false,
+        criticalAlert: true,
+        provisional: false,
+        sound: true,
+      );
     } catch (e) {
       debugPrint('PushNotificationService: requestPermission failed err=$e');
     }
@@ -130,12 +138,13 @@ class PushNotificationService {
     // Web doesn't support flutter_local_notifications.
     if (kIsWeb) return;
 
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosInit = DarwinInitializationSettings();
-    const init = InitializationSettings(android: androidInit, iOS: iosInit);
+    // Correction : retirer 'const' car ces constructeurs ne sont pas constants
+    final androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    final iosInit = DarwinInitializationSettings();
+    final init = InitializationSettings(android: androidInit, iOS: iosInit);
     await _localNotifications.initialize(settings: init);
 
-    const channel = AndroidNotificationChannel(
+    final channel = AndroidNotificationChannel(
       'thix_general',
       'THIX Notifications',
       description: 'Notifications générales THIX ID',
