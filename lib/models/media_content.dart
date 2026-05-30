@@ -71,5 +71,41 @@ class MediaContent {
         'updated_at': updatedAt.toIso8601String(),
       };
 
+  MediaContent copyWith({
+    String? id,
+    String? title,
+    String? subtitle,
+    String? type,
+    String? year,
+    String? coverUrl,
+    String? videoUrl,
+    int? viewCount,
+    int? rankPosition,
+    bool? isTrending,
+    bool? isNewRelease,
+    bool? isRecommended,
+    bool? isPublished,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return MediaContent(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      subtitle: subtitle ?? this.subtitle,
+      type: type ?? this.type,
+      year: year ?? this.year,
+      coverUrl: coverUrl ?? this.coverUrl,
+      videoUrl: videoUrl ?? this.videoUrl,
+      viewCount: viewCount ?? this.viewCount,
+      rankPosition: rankPosition ?? this.rankPosition,
+      isTrending: isTrending ?? this.isTrending,
+      isNewRelease: isNewRelease ?? this.isNewRelease,
+      isRecommended: isRecommended ?? this.isRecommended,
+      isPublished: isPublished ?? this.isPublished,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   String get rankDisplay => rankPosition != null ? '#$rankPosition' : '';
 }
