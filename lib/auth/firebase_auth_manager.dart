@@ -410,3 +410,4 @@ class FirebaseAuthManager implements AuthManager {
   }
   return ThixIdService.generate(); // ← suppression également ici
 }
+}
