@@ -4,6 +4,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:thix_id/models/event_item.dart';
 
 class AppConstants {
   static const String appName = 'THIX';
