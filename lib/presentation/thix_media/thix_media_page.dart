@@ -103,13 +103,13 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
               const SizedBox(height: 24),
             ],
             if (_selectedCategory == 'Accueil') ...[
-              const _SectionHeader(title: 'Tendances', showSeeAll: true, onSeeAll: () => _showAll('Tendances')),
+               _SectionHeader(title: 'Tendances', showSeeAll: true, onSeeAll: () => _showAll('Tendances')),
               const SizedBox(height: 12),
               _TrendingList(items: _filteredTrending, onItemTap: _navigateToVideo),
               const SizedBox(height: 24),
             ],
             if (_selectedCategory == 'Accueil')
-              const _SectionHeader(title: 'Recommandé pour vous', showSeeAll: true, onSeeAll: () => _showAll('Recommandations'))
+              _SectionHeader(title: 'Recommandé pour vous', showSeeAll: true, onSeeAll: () => _showAll('Recommandations'))
             else
               _SectionHeader(
                 title: 'Recommandations ($_selectedCategory)',
@@ -129,7 +129,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
               const SizedBox(height: 24),
             ],
             if (_selectedCategory == 'Accueil')
-              const _SectionHeader(title: 'Nouveautés', showSeeAll: true, onSeeAll: () => _showAll('Nouveautés'))
+               _SectionHeader(title: 'Nouveautés', showSeeAll: true, onSeeAll: () => _showAll('Nouveautés'))
             else
               _SectionHeader(
                 title: 'Nouveautés ($_selectedCategory)',
@@ -281,11 +281,17 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
       );
 
   Widget _buildFeatureBanner() {
-    final heritageItem = _allMedia.firstWhere(
-      (e) => e.title.contains('Héritage'),
-      orElse: () => _allMedia.isNotEmpty ? _allMedia.first : null,
-    );
-    return Container(
+  if (_allMedia.isEmpty) return const SizedBox.shrink();
+
+  final heritageItem = _allMedia.firstWhere(
+    (e) => e.title.contains('Héritage'),
+    orElse: () => _allMedia.first,
+  );
+
+  return Container(
+    // ... le reste de la bannière inchangé
+  );
+}
       height: 250,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
