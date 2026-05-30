@@ -5,7 +5,7 @@ import 'video_player_page.dart';
 import '../../models/media_content.dart';
 import '../../services/media_service.dart';
 
-// Couleurs (inchangées)
+// Couleurs
 const Color kBackgroundColor = Color(0xFFFBFBFD);
 const Color kAccentColor = Color(0xFF7A4DF3);
 const Color kHeaderIconColor = Color(0xFF6A7788);
@@ -103,7 +103,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
               const SizedBox(height: 24),
             ],
             if (_selectedCategory == 'Accueil') ...[
-               _SectionHeader(title: 'Tendances', showSeeAll: true, onSeeAll: () => _showAll('Tendances')),
+              _SectionHeader(title: 'Tendances', showSeeAll: true, onSeeAll: () => _showAll('Tendances')),
               const SizedBox(height: 12),
               _TrendingList(items: _filteredTrending, onItemTap: _navigateToVideo),
               const SizedBox(height: 24),
@@ -129,7 +129,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
               const SizedBox(height: 24),
             ],
             if (_selectedCategory == 'Accueil')
-               _SectionHeader(title: 'Nouveautés', showSeeAll: true, onSeeAll: () => _showAll('Nouveautés'))
+              _SectionHeader(title: 'Nouveautés', showSeeAll: true, onSeeAll: () => _showAll('Nouveautés'))
             else
               _SectionHeader(
                 title: 'Nouveautés ($_selectedCategory)',
@@ -146,28 +146,22 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
           ],
         ),
       ),
-      // ==================== RACCOURCIS EN BAS ====================
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: 0,
         selectedItemColor: kAccentColor,
         unselectedItemColor: Colors.grey,
         onTap: (index) {
-          // Actions rapides : redirection vers d'autres pages du thix
           switch (index) {
             case 0:
-              // Déjà sur Accueil, on peut remonter en haut
               break;
             case 1:
-              // Recherche (ouvrir une page de recherche avancée ou focus search bar)
               FocusScope.of(context).requestFocus(FocusNode());
               break;
             case 2:
-              // Favoris (à développer)
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Favoris à venir')));
               break;
             case 3:
-              // Profil (rediriger vers profil)
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil à venir')));
               break;
           }
@@ -182,7 +176,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
     );
   }
 
-  // ==================== CONSTRUCTEURS DE L'UI (inchangés ou légèrement adaptés) ====================
+  // ==================== CONSTRUCTEURS DE L'UI ====================
 
   PreferredSizeWidget _buildAppBar() => PreferredSize(
         preferredSize: const Size.fromHeight(70),
@@ -281,17 +275,14 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
       );
 
   Widget _buildFeatureBanner() {
-  if (_allMedia.isEmpty) return const SizedBox.shrink();
+    if (_allMedia.isEmpty) return const SizedBox.shrink();
 
-  final heritageItem = _allMedia.firstWhere(
-    (e) => e.title.contains('Héritage'),
-    orElse: () => _allMedia.first,
-  );
+    final heritageItem = _allMedia.firstWhere(
+      (e) => e.title.contains('Héritage'),
+      orElse: () => _allMedia.first,
+    );
 
-  return Container(
-    // ... le reste de la bannière inchangé
-  );
-}
+    return Container(
       height: 250,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -323,7 +314,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
                 Row(
                   children: [
                     ElevatedButton.icon(
-                      onPressed: () => heritageItem != null ? _navigateToVideo(heritageItem) : null,
+                      onPressed: () => _navigateToVideo(heritageItem),
                       icon: const Icon(Icons.play_arrow, size: 18),
                       label: const Text('Regarder maintenant', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
@@ -396,7 +387,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
       );
 }
 
-// ==================== WIDGETS RÉUTILISABLES (adaptés pour MediaContent) ====================
+// ==================== WIDGETS RÉUTILISABLES ====================
 
 class _MediaChip extends StatelessWidget {
   final String label;
