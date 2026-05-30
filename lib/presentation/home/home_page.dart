@@ -451,13 +451,11 @@ class _HomePagePremiumState extends State<HomePagePremium>
                           mainAxisSpacing: 5,
                           childAspectRatio: 0.92,
                           children: [
-                            _ServiceCard(
-                              icon: Icons.rocket_launch_rounded,
-                              title: 'Incubateur',
-                              iconBackgroundColor: const Color(0xFFF3F0FF),
-                              iconColor: const Color(0xFF5B3FFF),
-                              onTap: () => context.pushNamed('incubator'),
-                            ),
+                            _ServiceItem(
+  icon: Icons.play_circle_filled,
+  label: 'THIX MEDIA',
+  onTap: () => context.push('/thix-media'),
+),
                             _ServiceCard(
   icon: Icons.storefront_rounded,
   title: 'THIX Market',
