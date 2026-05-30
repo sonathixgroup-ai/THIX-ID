@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'video_player_page.dart'; // Import de la page de lecture
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'video_player_page.dart';
 
-// Couleurs (inchangées)
+// Couleurs
 const Color kBackgroundColor = Color(0xFFFBFBFD);
 const Color kAccentColor = Color(0xFF7A4DF3);
 const Color kHeaderIconColor = Color(0xFF6A7788);
 
-// Modèle de contenu média
+// Modèle de contenu média (identique à la structure de la table)
 class MediaItem {
   final String id;
   final String title;
-  final String subtitle; // artiste / réalisateur
-  final String type; // "Musique", "Film", etc.
-  final String year;
+  final String? subtitle;
+  final String type;
+  final String? year;
   final String coverUrl;
   final String videoUrl;
   final int viewCount;
-  final String rank; // pour les tendances
+  final int? rankPosition; // pour les tendances
 
   MediaItem({
     required this.id,
@@ -28,145 +29,26 @@ class MediaItem {
     required this.coverUrl,
     required this.videoUrl,
     this.viewCount = 0,
-    this.rank = '',
+    this.rankPosition,
   });
-}
 
-// Données simulées (à remplacer par votre API)
-final List<MediaItem> allMedia = [
-  MediaItem(
-    id: '1',
-    title: 'Fally l’upa – Amore',
-    subtitle: 'Fally l’upa Officiel',
-    type: 'Musique',
-    year: '2024',
-    coverUrl: 'https://picsum.photos/id/100/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 1200000,
-    rank: '#1',
-  ),
-  MediaItem(
-    id: '2',
-    title: 'Innoss’B – Yo Pe',
-    subtitle: 'Innoss’B Officiel',
-    type: 'Musique',
-    year: '2024',
-    coverUrl: 'https://picsum.photos/id/101/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 980000,
-    rank: '#2',
-  ),
-  MediaItem(
-    id: '3',
-    title: 'Héritage – Épisode 1',
-    subtitle: 'THIX Originals',
-    type: 'Série',
-    year: '2024',
-    coverUrl: 'https://picsum.photos/id/102/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 850000,
-    rank: '#3',
-  ),
-  MediaItem(
-    id: '4',
-    title: 'Résumé : RDC vs Maroc',
-    subtitle: 'THIX Sports',
-    type: 'Sport',
-    year: '2024',
-    coverUrl: 'https://picsum.photos/id/103/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 650000,
-    rank: '#4',
-  ),
-  MediaItem(
-    id: '5',
-    title: 'Black Flag',
-    subtitle: 'Action',
-    type: 'Film',
-    year: '2023',
-    coverUrl: 'https://picsum.photos/id/104/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 0,
-    rank: '',
-  ),
-  MediaItem(
-    id: '6',
-    title: 'Coeur battant',
-    subtitle: 'Drame',
-    type: 'Série',
-    year: '2024',
-    coverUrl: 'https://picsum.photos/id/105/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 0,
-    rank: '',
-  ),
-  MediaItem(
-    id: '7',
-    title: 'Le Dernier Combat',
-    subtitle: 'Film',
-    type: 'Film',
-    year: '2022',
-    coverUrl: 'https://picsum.photos/id/106/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 0,
-    rank: '',
-  ),
-  MediaItem(
-    id: '8',
-    title: 'Rêves d’Afrique',
-    subtitle: 'Documentaire',
-    type: 'Documentaire',
-    year: '2023',
-    coverUrl: 'https://picsum.photos/id/107/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 0,
-    rank: '',
-  ),
-  MediaItem(
-    id: '9',
-    title: 'Le prix du silence',
-    subtitle: 'Film',
-    type: 'Film',
-    year: '2024',
-    coverUrl: 'https://picsum.photos/id/108/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 0,
-    rank: '',
-  ),
-  MediaItem(
-    id: '10',
-    title: 'Dance Challenge',
-    subtitle: 'Vidéo',
-    type: 'Vidéo',
-    year: '2024',
-    coverUrl: 'https://picsum.photos/id/109/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 0,
-    rank: '',
-  ),
-  MediaItem(
-    id: '11',
-    title: 'Horizon',
-    subtitle: 'Série Saison 2',
-    type: 'Série',
-    year: '2024',
-    coverUrl: 'https://picsum.photos/id/110/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 0,
-    rank: '',
-  ),
-  MediaItem(
-    id: '12',
-    title: 'Énergie',
-    subtitle: 'Musique',
-    type: 'Musique',
-    year: '2024',
-    coverUrl: 'https://picsum.photos/id/111/200/300',
-    videoUrl: 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    viewCount: 0,
-    rank: '',
-  ),
-];
+  factory MediaItem.fromJson(Map<String, dynamic> json) {
+    return MediaItem(
+      id: json['id'].toString(),
+      title: json['title'] ?? '',
+      subtitle: json['subtitle'],
+      type: json['type'] ?? '',
+      year: json['year'],
+      coverUrl: json['cover_url'] ?? '',
+      videoUrl: json['video_url'] ?? '',
+      viewCount: json['view_count'] ?? 0,
+      rankPosition: json['rank_position'],
+    );
+  }
+
+  // Pour l'affichage du rang (#1, #2...)
+  String get rankDisplay => rankPosition != null ? '#$rankPosition' : '';
+}
 
 class ThixMediaPage extends StatefulWidget {
   const ThixMediaPage({super.key});
@@ -176,13 +58,51 @@ class ThixMediaPage extends StatefulWidget {
 }
 
 class _ThixMediaPageState extends State<ThixMediaPage> {
+  final SupabaseClient _supabase = Supabase.instance.client;
+  List<MediaItem> _allMedia = [];
+  bool _isLoading = true;
+  String? _error;
+
   String _selectedCategory = 'Accueil';
   String _searchQuery = '';
-  TextEditingController _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMedia();
+  }
+
+  Future<void> _loadMedia() async {
+    try {
+      final response = await _supabase
+          .from('media_contents')
+          .select('*')
+          .eq('is_published', true)
+          .order('created_at', ascending: false);
+      if (response is List) {
+        final items = response.map((json) => MediaItem.fromJson(json)).toList();
+        setState(() {
+          _allMedia = items;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _error = 'Format de données invalide';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
 
   // Filtrage selon la catégorie et la recherche
   List<MediaItem> get _filteredTrending {
-    var list = allMedia.where((item) => item.rank.isNotEmpty).toList();
+    var list = _allMedia.where((item) => item.rankPosition != null).toList();
     if (_searchQuery.isNotEmpty) {
       list = list.where((item) => item.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     }
@@ -190,7 +110,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
   }
 
   List<MediaItem> get _filteredRecommendations {
-    var list = allMedia.where((item) => item.rank.isEmpty && item.type != 'Vidéo').toList();
+    var list = _allMedia.where((item) => item.rankPosition == null && item.type != 'Vidéo').toList();
     if (_searchQuery.isNotEmpty) {
       list = list.where((item) => item.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     }
@@ -198,7 +118,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
   }
 
   List<MediaItem> get _filteredNewReleases {
-    var list = allMedia.where((item) => item.year == '2024').toList();
+    var list = _allMedia.where((item) => item.year == '2024').toList();
     if (_searchQuery.isNotEmpty) {
       list = list.where((item) => item.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     }
@@ -214,8 +134,25 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
     );
   }
 
+  void _showAll(String section) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Voir tout : $section')));
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: kBackgroundColor,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: kBackgroundColor,
+        body: Center(child: Text('Erreur : $_error')),
+      );
+    }
+
     return Scaffold(
       backgroundColor: kBackgroundColor,
       appBar: PreferredSize(
@@ -267,9 +204,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
                             child: TextField(
                               controller: _searchController,
                               onChanged: (value) {
-                                setState(() {
-                                  _searchQuery = value;
-                                });
+                                setState(() => _searchQuery = value);
                               },
                               decoration: const InputDecoration(
                                 hintText: 'Rechercher un film, une série...',
@@ -439,12 +374,11 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
     );
   }
 
-  void _showAll(String section) {
-    // Par exemple, ouvrir une page de liste complète
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Voir tout : $section')));
-  }
-
   Widget _buildFeatureBanner() {
+    final heritageItem = _allMedia.firstWhere(
+      (e) => e.title.contains('Héritage'),
+      orElse: () => _allMedia.isNotEmpty ? _allMedia.first : null,
+    );
     return Container(
       height: 250,
       padding: const EdgeInsets.all(20),
@@ -502,8 +436,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
                   children: [
                     ElevatedButton.icon(
                       onPressed: () {
-                        final heritageItem = allMedia.firstWhere((e) => e.title.contains('Héritage'));
-                        _navigateToVideo(heritageItem);
+                        if (heritageItem != null) _navigateToVideo(heritageItem);
                       },
                       icon: const Icon(Icons.play_arrow, size: 18),
                       label: const Text('Regarder maintenant', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
@@ -590,20 +523,14 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
   }
 }
 
-// ==================== WIDGETS PRIVÉS MODIFIÉS ====================
+// ==================== WIDGETS PRIVÉS (inchangés sauf l'utilisation de rankDisplay) ====================
 
 class _MediaChip extends StatelessWidget {
   final String label;
   final bool selected;
   final IconData? icon;
   final VoidCallback onTap;
-
-  const _MediaChip({
-    required this.label,
-    this.selected = false,
-    this.icon,
-    required this.onTap,
-  });
+  const _MediaChip({required this.label, this.selected = false, this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -641,7 +568,6 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final bool showSeeAll;
   final VoidCallback? onSeeAll;
-
   const _SectionHeader({required this.title, this.showSeeAll = false, this.onSeeAll});
 
   @override
@@ -669,14 +595,11 @@ class _SectionHeader extends StatelessWidget {
 class _TrendingList extends StatelessWidget {
   final List<MediaItem> items;
   final Function(MediaItem) onItemTap;
-
   const _TrendingList({required this.items, required this.onItemTap});
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return const Center(child: Text('Aucune donnée pour les tendances.'));
-    }
+    if (items.isEmpty) return const Center(child: Text('Aucune donnée pour les tendances.'));
     return SizedBox(
       height: 130,
       child: ListView.builder(
@@ -715,7 +638,7 @@ class _TrendingList extends StatelessWidget {
                           color: Colors.black.withOpacity(0.7),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Text(item.rank, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.white)),
+                        child: Text(item.rankDisplay, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.white)),
                       ),
                     ],
                   ),
@@ -743,14 +666,11 @@ class _TrendingList extends StatelessWidget {
 class _RecommendationGrid extends StatelessWidget {
   final List<MediaItem> items;
   final Function(MediaItem) onItemTap;
-
   const _RecommendationGrid({required this.items, required this.onItemTap});
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return const Center(child: Text('Aucune recommandation disponible.'));
-    }
+    if (items.isEmpty) return const Center(child: Text('Aucune recommandation disponible.'));
     return SizedBox(
       height: 180,
       child: ListView.builder(
@@ -801,7 +721,7 @@ class _RecommendationGrid extends StatelessWidget {
                       children: [
                         Text(item.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, height: 1.2), maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 2),
-                        Text('${item.type} • ${item.year}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text('${item.type} • ${item.year ?? ''}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
                       ],
                     ),
                   ),
@@ -818,14 +738,11 @@ class _RecommendationGrid extends StatelessWidget {
 class _NewReleasesGrid extends StatelessWidget {
   final List<MediaItem> items;
   final Function(MediaItem) onItemTap;
-
   const _NewReleasesGrid({required this.items, required this.onItemTap});
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return const Center(child: Text('Aucune nouveauté pour cette catégorie.'));
-    }
+    if (items.isEmpty) return const Center(child: Text('Aucune nouveauté pour cette catégorie.'));
     return SizedBox(
       height: 180,
       child: ListView.builder(
@@ -861,7 +778,7 @@ class _NewReleasesGrid extends StatelessWidget {
                       children: [
                         Text(item.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, height: 1.2), maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 2),
-                        Text('${item.type} • ${item.year}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text('${item.type} • ${item.year ?? ''}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
                       ],
                     ),
                   ),
