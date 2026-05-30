@@ -14,7 +14,7 @@ class EventDetailsPage extends StatefulWidget {
 }
 
 class _EventDetailsPageState extends State<EventDetailsPage> {
-  final _service = EventService();
+  final _service = EventService(Supabase.instance.client);
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +166,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           icon: Icons.location_on_rounded,
                           label: event.location),
                       _InfoPill(
-                          icon: Icons.payments_rounded, label: event.price),
+                          _InfoPill(icon: Icons.payments_rounded, label: event.price?.toString() ?? 'Gratuit'),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
