@@ -30,6 +30,7 @@ import 'package:thix_id/presentation/events/event_ticket_page.dart';
 import 'presentation/education/education_page.dart';
 import 'package:thix_id/presentation/admin/admin_page.dart';
 import 'package:thix_id/presentation/admin/admin_routes.dart';
+import 'package:thix_id/presentation/jobs/job_dashboard_page.dart';
 
 class AppRouter {
   static GoRouter create(AuthController auth) {
@@ -282,7 +283,13 @@ class AppRouter {
           child: EducationPage(),
         ),
       ),
-
+       GoRoute(
+  path: AppRoutes.jobDashboard,
+  name: 'jobDashboard',
+  pageBuilder: (context, state) => const NoTransitionPage(
+    child: JobDashboardPage(),
+  ),
+),
        // Admin web portal (RBAC enforced at page + RLS at DB).
        GoRoute(
          path: '${AppRoutes.admin}/:module',
@@ -320,6 +327,7 @@ class AppRoutes {
   static const String jobs = '/jobs';
   static const String opportunities = '/opportunities';
   static const String events = '/events';
+  static const String jobDashboard = '/job-dashboard';
   static const String education = '/education';
   static const String admin = '/admin';
 }
