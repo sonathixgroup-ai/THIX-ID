@@ -61,6 +61,20 @@ class EventItem {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  // ==========================================================================
+  // NOUVEAUX CHAMPS AJOUTÉS POUR CORRIGER LES ERREURS UI
+  // ==========================================================================
+
+  /// Nombre de participants (si disponible).
+  final int? participantCount;
+
+  /// Statut de l'inscription de l'utilisateur courant ('valid', 'cancelled', etc.).
+  final String? registrationStatus;
+
+  // ==========================================================================
+  // CONSTRUCTEURS
+  // ==========================================================================
+
   const EventItem({
     required this.id,
     required this.title,
@@ -89,7 +103,28 @@ class EventItem {
     required this.agenda,
     required this.createdAt,
     required this.updatedAt,
+    this.participantCount,
+    this.registrationStatus,
   });
+
+  // ==========================================================================
+  // GETTERS POUR COMPATIBILITÉ AVEC L'UI (évite de modifier le service)
+  // ==========================================================================
+
+  /// Alias pour `startsAt` – utilisé par l'UI à la place de `eventDate`.
+  DateTime get eventDate => startsAt;
+
+  /// URL de l'image de couverture construite à partir du bucket Supabase.
+  /// Retourne null si `coverImageBucket` ou `coverImagePath` est manquant.
+  String? get imageUrl {
+    if (coverImageBucket == null || coverImagePath == null) return null;
+    // Concaténation typique pour Supabase Storage
+    return 'https://your_supabase_url/storage/v1/object/public/${coverImageBucket}/${coverImagePath}';
+  }
+
+  // ==========================================================================
+  // copyWith & toJson / fromJson (avec les nouveaux champs)
+  // ==========================================================================
 
   EventItem copyWith({
     String? id,
@@ -119,6 +154,8 @@ class EventItem {
     List<Map<String, dynamic>>? agenda,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? participantCount,
+    String? registrationStatus,
   }) {
     return EventItem(
       id: id ?? this.id,
@@ -148,6 +185,8 @@ class EventItem {
       agenda: agenda ?? this.agenda,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      participantCount: participantCount ?? this.participantCount,
+      registrationStatus: registrationStatus ?? this.registrationStatus,
     );
   }
 
@@ -180,6 +219,8 @@ class EventItem {
       'agenda': agenda,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'participant_count': participantCount,
+      'registration_status': registrationStatus,
     };
   }
 
@@ -254,11 +295,13 @@ class EventItem {
       agenda: parseMapList(json['agenda']),
       createdAt: parseDate(json['created_at']),
       updatedAt: parseDate(json['updated_at']),
+      // Nouveaux champs
+      participantCount: json['participant_count'] as int?,
+      registrationStatus: json['registration_status'] as String?,
     );
   }
 
   static String _defaultDateLabel(DateTime startsAt) {
-    // Simple formatting without intl dependency.
     final d = startsAt.toLocal();
     String two(int v) => v.toString().padLeft(2, '0');
     return '${two(d.day)}/${two(d.month)}/${d.year} • ${two(d.hour)}:${two(d.minute)}';
