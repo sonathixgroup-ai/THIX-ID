@@ -352,47 +352,42 @@ class FirestoreUserService {
   /// This is required even when payments are fictive: the ID must work everywhere
   /// (search, public profile, chat lookup).
   Future<String> assignRealThixIdIfMissing({required String uid, String? countryOrOrigin, String? displayName}) async {
-    final sessionUid = _requireAuthedUid();
-    if (uid.trim().isEmpty) throw Exception('UID requis.');
-    final targetUid = sessionUid;
-    try {
-      // Some projects don't have `country_or_origin` column. Avoid selecting it.
-      final row = await _client.from(_table).select('thix_id').eq('id', targetUid).maybeSingle();
-      final existing = (row?['thix_id'] ?? '').toString().trim().toUpperCase();
-      if (existing.isNotEmpty && existing != 'THIX-PENDING' && existing != 'THIX-000000') return existing;
+  final sessionUid = _requireAuthedUid();
+  if (uid.trim().isEmpty) throw Exception('UID requis.');
+  final targetUid = sessionUid;
+  try {
+    final row = await _client.from(_table).select('thix_id').eq('id', targetUid).maybeSingle();
+    final existing = (row?['thix_id'] ?? '').toString().trim().toUpperCase();
+    if (existing.isNotEmpty && existing != 'THIX-PENDING' && existing != 'THIX-000000') return existing;
 
-      final cc = ThixIdService.inferCountryCode(selectedOrUserProvided: countryOrOrigin);
-      final nameForId = (displayName ?? '').trim().isEmpty ? 'User' : (displayName ?? '').trim();
-      // Generate candidate and ensure uniqueness.
-      // We use a DB-side unique constraint (migration) + retry loop to handle
-      // concurrency races safely.
-      for (var i = 0; i < 20; i++) {
-        final candidate = ThixIdService.generate(countryCode: cc).toUpperCase();
-        try {
-          await SupabaseSafeWrite.upsert(
-            client: _client,
-            table: _table,
-            payload: {
-              'id': targetUid,
-              'thix_id': candidate,
-              'updated_at': DateTime.now().toUtc().toIso8601String(),
-            },
-            onUnknownColumn: _reloadSchemaCache,
-          );
-          return candidate;
-        } catch (e) {
-          // If candidate collides with an existing thix_id, retry.
-          if (_looksLikeUniqueViolation(e)) continue;
-          rethrow;
-        }
+    final cc = ThixIdService.inferCountryCode(selectedOrUserProvided: countryOrOrigin);
+    final nameForId = (displayName ?? '').trim().isEmpty ? 'User' : (displayName ?? '').trim();
+    // Boucle de 20 tentatives
+    for (var i = 0; i < 20; i++) {
+      final candidate = ThixIdService.generate(); // ✅ correction : plus de paramètre countryCode
+      try {
+        await SupabaseSafeWrite.upsert(
+          client: _client,
+          table: _table,
+          payload: {
+            'id': targetUid,
+            'thix_id': candidate,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          },
+          onUnknownColumn: _reloadSchemaCache,
+        );
+        return candidate;
+      } catch (e) {
+        if (_looksLikeUniqueViolation(e)) continue;
+        rethrow;
       }
-      throw Exception('Impossible de générer un THIX ID unique.');
-    } catch (e) {
-      debugPrint('FirestoreUserService(Supabase): assignRealThixIdIfMissing failed uid=$uid err=$e');
-      rethrow;
     }
+    throw Exception('Impossible de générer un THIX ID unique.');
+  } catch (e) {
+    debugPrint('FirestoreUserService(Supabase): assignRealThixIdIfMissing failed uid=$uid err=$e');
+    rethrow;
   }
-
+}
   bool _looksLikeUniqueViolation(Object e) {
     if (e is PostgrestException) {
       // Postgres unique_violation = 23505.
