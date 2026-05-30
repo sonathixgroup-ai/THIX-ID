@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'thix_sante_home_page.dart'; // adapte le chemin
 
 class ThixSantePage extends StatelessWidget {
   const ThixSantePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const ThixSanteHomePage();
-  }
-}
+    return Scaffold(
       backgroundColor: const Color(0xFFF8F9FC),
       body: SafeArea(
         child: SingleChildScrollView(
