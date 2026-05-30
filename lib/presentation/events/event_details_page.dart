@@ -22,7 +22,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       backgroundColor: context.theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: FutureBuilder(
-          future: _service.fetchEvent(widget.eventId),
+          future: _service.getEventById(widget.eventId), // ✅ corrigé
           builder: (context, snap) {
             final event = snap.data;
             if (snap.connectionState != ConnectionState.done) {
@@ -35,7 +35,9 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   children: [
                     _TopBar(eventId: widget.eventId),
                     const SizedBox(height: AppSpacing.xl),
-                    Text('Événement introuvable.', style: context.textStyles.titleMedium?.copyWith(color: context.theme.colorScheme.onSurface)),
+                    Text('Événement introuvable.',
+                        style: context.textStyles.titleMedium
+                            ?.copyWith(color: context.theme.colorScheme.onSurface)),
                     const Spacer(),
                     SizedBox(
                       width: double.infinity,
@@ -62,16 +64,20 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(AppRadius.lg),
                         color: LightModeColors.success.withValues(alpha: 0.10),
-                        border: Border.all(color: LightModeColors.success.withValues(alpha: 0.30)),
+                        border: Border.all(
+                            color: LightModeColors.success.withValues(alpha: 0.30)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.check_circle_rounded, color: LightModeColors.success),
+                          const Icon(Icons.check_circle_rounded,
+                              color: LightModeColors.success),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Text(
                               'Inscription confirmée. Les infos pratiques seront envoyées au profil THIX ID.',
-                              style: context.textStyles.bodyMedium?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w700),
+                              style: context.textStyles.bodyMedium?.copyWith(
+                                  color: context.theme.colorScheme.onSurface,
+                                  fontWeight: FontWeight.w700),
                             ),
                           ),
                         ],
@@ -83,12 +89,15 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     height: 200,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(AppRadius.xl),
-                      border: Border.all(color: LightModeColors.accent.withValues(alpha: 0.5), width: 1.5),
+                      border: Border.all(
+                          color: LightModeColors.accent.withValues(alpha: 0.5),
+                          width: 1.5),
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          context.theme.colorScheme.primary.withValues(alpha: 0.45),
+                          context.theme.colorScheme.primary
+                              .withValues(alpha: 0.45),
                           LightModeColors.accent.withValues(alpha: 0.22),
                           context.theme.colorScheme.surface,
                         ],
@@ -99,7 +108,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                         Positioned(
                           right: -20,
                           top: -30,
-                          child: Icon(Icons.shield_rounded, size: 160, color: LightModeColors.accent.withValues(alpha: 0.15)),
+                          child: Icon(Icons.shield_rounded,
+                              size: 160,
+                              color:
+                                  LightModeColors.accent.withValues(alpha: 0.15)),
                         ),
                         Positioned(
                           left: AppSpacing.lg,
@@ -109,17 +121,33 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.md,
+                                    vertical: AppSpacing.xs),
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(AppRadius.full),
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadius.full),
                                   color: LightModeColors.accent,
                                 ),
-                                child: Text('THIX VERIFIED', style: context.textStyles.labelSmall?.copyWith(color: const Color(0xFF0A2F5C), fontWeight: FontWeight.w900)),
+                                child: Text('THIX VERIFIED',
+                                    style: context.textStyles.labelSmall
+                                        ?.copyWith(
+                                            color: const Color(0xFF0A2F5C),
+                                            fontWeight: FontWeight.w900)),
                               ),
                               const SizedBox(height: AppSpacing.sm),
-                              Text(event.title, style: context.textStyles.titleLarge?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w900)),
+                              Text(event.title,
+                                  style: context.textStyles.titleLarge
+                                      ?.copyWith(
+                                          color: context
+                                              .theme.colorScheme.onSurface,
+                                          fontWeight: FontWeight.w900)),
                               const SizedBox(height: AppSpacing.xs),
-                              Text(event.category, style: context.textStyles.labelLarge?.copyWith(color: LightModeColors.secondaryText, fontWeight: FontWeight.w700)),
+                              Text(event.category,
+                                  style: context.textStyles.labelLarge
+                                      ?.copyWith(
+                                          color: LightModeColors.secondaryText,
+                                          fontWeight: FontWeight.w700)),
                             ],
                           ),
                         ),
@@ -131,17 +159,30 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     spacing: AppSpacing.sm,
                     runSpacing: AppSpacing.sm,
                     children: [
-                      _InfoPill(icon: Icons.event_available_rounded, label: event.dateLabel),
-                      _InfoPill(icon: Icons.location_on_rounded, label: event.location),
-                      _InfoPill(icon: Icons.payments_rounded, label: event.price),
+                      _InfoPill(
+                          icon: Icons.event_available_rounded,
+                          label: event.dateLabel),
+                      _InfoPill(
+                          icon: Icons.location_on_rounded,
+                          label: event.location),
+                      _InfoPill(
+                          icon: Icons.payments_rounded, label: event.price),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  Text('À propos', style: context.textStyles.titleMedium?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w800)),
+                  Text('À propos',
+                      style: context.textStyles.titleMedium?.copyWith(
+                          color: context.theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w800)),
                   const SizedBox(height: AppSpacing.sm),
-                  Text(event.description, style: context.textStyles.bodyMedium?.copyWith(color: LightModeColors.secondaryText, height: 1.5)),
+                  Text(event.description,
+                      style: context.textStyles.bodyMedium?.copyWith(
+                          color: LightModeColors.secondaryText, height: 1.5)),
                   const SizedBox(height: AppSpacing.lg),
-                  Text('Highlights', style: context.textStyles.titleMedium?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w800)),
+                  Text('Highlights',
+                      style: context.textStyles.titleMedium?.copyWith(
+                          color: context.theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w800)),
                   const SizedBox(height: AppSpacing.sm),
                   ...event.highlights.map((h) => Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -150,10 +191,16 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           children: [
                             const Padding(
                               padding: EdgeInsets.only(top: 2),
-                              child: Icon(Icons.auto_awesome_rounded, size: 18, color: LightModeColors.accent),
+                              child: Icon(Icons.auto_awesome_rounded,
+                                  size: 18, color: LightModeColors.accent),
                             ),
                             const SizedBox(width: AppSpacing.sm),
-                            Expanded(child: Text(h, style: context.textStyles.bodyMedium?.copyWith(color: LightModeColors.secondaryText, height: 1.45))),
+                            Expanded(
+                                child: Text(h,
+                                    style: context.textStyles.bodyMedium
+                                        ?.copyWith(
+                                            color: LightModeColors.secondaryText,
+                                            height: 1.45))),
                           ],
                         ),
                       )),
@@ -161,7 +208,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   SizedBox(
                     height: 52,
                     child: FilledButton.icon(
-                      onPressed: () => context.push('/events/${event.id}/register'),
+                      onPressed: () =>
+                          context.push('/events/${event.id}/register'),
                       icon: const Icon(Icons.confirmation_number_rounded),
                       label: const Text('S’inscrire avec THIX ID'),
                     ),
@@ -198,7 +246,10 @@ class _TopBar extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
         ),
         Expanded(
-          child: Text('Détails', style: context.textStyles.titleLarge?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w900)),
+          child: Text('Détails',
+              style: context.textStyles.titleLarge?.copyWith(
+                  color: context.theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w900)),
         ),
       ],
     );
@@ -213,7 +264,8 @@ class _InfoPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.full),
         border: Border.all(color: context.theme.dividerColor),
@@ -224,7 +276,10 @@ class _InfoPill extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: context.theme.colorScheme.primary),
           const SizedBox(width: AppSpacing.xs),
-          Text(label, style: context.textStyles.labelMedium?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w600)),
+          Text(label,
+              style: context.textStyles.labelMedium?.copyWith(
+                  color: context.theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );
