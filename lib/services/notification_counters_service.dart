@@ -354,20 +354,21 @@ class NotificationCountersService {
           }
         });
 
-            // Première émission
-    await emit();
-  } catch (e) {
-    debugPrint('NotificationCountersService: realtime setup failed err=$e');
-    startPolling();
-    await emit();
+        // Première émission
+        await emit();
+      } catch (e) {
+        debugPrint('NotificationCountersService: realtime setup failed err=$e');
+        startPolling();
+        await emit();
+      }
+    }
+
+    // Gestion du cycle de vie du stream
+    controller.onListen = () => unawaited(setupRealtime());
+    controller.onCancel = () {
+      unawaited(cleanup());
+    };
+
+    return controller.stream.distinct();
   }
 }
-
-// Gestion du cycle de vie du stream
-controller
-  ..onListen = () => unawaited(setupRealtime())
-  ..onCancel = () {
-    unawaited(cleanup());
-  };
-
-return controller.stream.distinct();
