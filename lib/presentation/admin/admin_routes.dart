@@ -1,7 +1,10 @@
 enum AdminModule {
   overview,
+  accessRequests,
   users,
   verification,
+  events,
+  trainings,
   uid,
   jobs,
   news,
@@ -20,10 +23,16 @@ extension AdminModuleX on AdminModule {
     switch (this) {
       case AdminModule.overview:
         return 'overview';
+      case AdminModule.accessRequests:
+        return 'access-requests';
       case AdminModule.users:
         return 'users';
       case AdminModule.verification:
         return 'verification';
+      case AdminModule.events:
+        return 'events';
+      case AdminModule.trainings:
+        return 'trainings';
       case AdminModule.uid:
         return 'uid';
       case AdminModule.jobs:

@@ -205,7 +205,10 @@ class _DocumentVaultPageState extends State<DocumentVaultPage> {
     } catch (e) {
       debugPrint('Vault: upload failed err=$e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Upload impossible.')));
+      final msg = DocumentService.isBucketNotFound(e)
+          ? 'Upload impossible : bucket Storage manquant ("${DocumentService.bucket}").'
+          : 'Upload impossible.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
@@ -617,7 +620,7 @@ class _DocumentVaultPageState extends State<DocumentVaultPage> {
                         try {
                           final docRowId = (row['id'] ?? '').toString();
                           if (docRowId.trim().isEmpty) throw Exception('id manquant');
-                          await _docs.deleteDocument(uid: me.id, docDocId: docRowId, storagePath: storagePath);
+                          await _docs.deleteDocument(uid: me.id, documentId: docRowId, storagePath: storagePath);
                           if (!mounted) return;
                           context.pop();
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Document supprimé.')));

@@ -7,8 +7,8 @@ import 'package:thix_id/supabase/supabase_config.dart';
 class ThixCall {
   final String id;
   final String? chatId;
-  final String kind; // audio|video
-  final String status; // ongoing|completed|missed|declined
+  final String kind;
+  final String status;
   final String callerId;
   final String receiverId;
   final DateTime startedAt;
@@ -58,32 +58,23 @@ class ThixCall {
 class CallService {
   static const String table = 'call_history';
   static const String signalsTable = 'thix_call_signals';
-
-  /// Supabase Edge Function that returns an Agora token.
-  /// You will create it in Supabase as: `agora-token`.
   static const String agoraTokenFunction = 'agora-token';
 
   final SupabaseClient _client;
+  final List<RealtimeChannel> _activeChannels = [];
+
   CallService({SupabaseClient? client}) : _client = client ?? SupabaseConfig.client;
 
-  /// Agora requires an integer UID. We derive a stable positive int from the auth UID.
-  /// Not cryptographically strong, but good enough for mapping (token is the real auth).
   int agoraUidFor(String userId) {
-    // FNV-1a 32-bit
     var hash = 0x811c9dc5;
     for (final codeUnit in userId.codeUnits) {
       hash ^= codeUnit;
       hash = (hash * 0x01000193) & 0xffffffff;
     }
-    // Agora UID must be > 0
     final uid = hash & 0x7fffffff;
     return uid == 0 ? 1 : uid;
   }
 
-  /// Fetch an Agora RTC token from Supabase Edge Function.
-  ///
-  /// The Edge Function validates that the caller is authenticated and returns:
-  /// `{ "appId": "...", "token": "...", "channel": "...", "uid": 123 }`
   Future<Map<String, dynamic>> fetchAgoraToken({required String channel, required int uid, required String role}) async {
     try {
       final res = await _client.functions.invoke(
@@ -105,8 +96,6 @@ class CallService {
     final caller = _client.auth.currentUser;
     if (caller == null) throw Exception('Not authenticated');
     final safeKind = (kind == 'video') ? 'video' : 'audio';
-
-    // chat_id is uuid in DB; some UI flows may pass virtual ids.
     final safeChatId = _isUuidLike(chatId) ? chatId : null;
 
     final inserted = await _client
@@ -125,7 +114,6 @@ class CallService {
     return (inserted['id'] as String?) ?? '';
   }
 
-  /// Sends a WebRTC signaling message via Postgres (Realtime).
   Future<void> sendSignal({
     required String callId,
     required String toUserId,
@@ -153,11 +141,10 @@ class CallService {
     }
   }
 
-  /// Stream signals for this user for a given call.
   Stream<List<Map<String, dynamic>>> streamSignals({required String callId, required String forUserId}) {
     final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
     final channel = _client.channel('thix_call_signals:$callId:$forUserId');
-    final filter = PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'call_id', value: callId);
+    final filterCall = PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'call_id', value: callId);
 
     Future<void> emitLatest() async {
       try {
@@ -183,12 +170,12 @@ class CallService {
             event: PostgresChangeEvent.insert,
             schema: 'public',
             table: signalsTable,
-            filter: filter,
-            callback: (_) => emitLatest(),
+            filter: filterCall,
+            callback: (_) => unawaited(emitLatest()), // ✅ correction : callback requis
           )
           .subscribe((status, err) {
-        if (err != null) debugPrint('CallService: signals realtime subscribe error status=$status err=$err');
-      });
+            if (err != null) debugPrint('CallService: signals realtime subscribe error status=$status err=$err');
+          });
     };
 
     controller.onCancel = () async {
@@ -219,8 +206,15 @@ class CallService {
       'ongoing' || 'completed' || 'missed' || 'declined' => status,
       _ => 'declined',
     };
+    final updateData = {
+      'status': safe,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (safe == 'completed' || safe == 'missed' || safe == 'declined') {
+      updateData['ended_at'] = DateTime.now().toUtc().toIso8601String();
+    }
     try {
-      await _client.from(table).update({'status': safe, 'updated_at': DateTime.now().toUtc().toIso8601String()}).eq('id', callId);
+      await _client.from(table).update(updateData).eq('id', callId);
     } catch (e) {
       debugPrint('CallService: setCallStatus failed id=$callId status=$safe err=$e');
       rethrow;
@@ -251,23 +245,35 @@ class CallService {
       }
     }
 
-    unawaited(emitLatest());
-    channel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: table,
-          filter: filter,
-          callback: (_) => emitLatest(),
-        )
-        .subscribe((status, err) {
-          if (err != null) debugPrint('CallService: realtime subscribe error=$err');
-        });
+    controller.onListen = () {
+      unawaited(emitLatest());
+      channel
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: table,
+            filter: filter,
+            callback: (_) => unawaited(emitLatest()), // ✅ correction : callback requis
+          )
+          .subscribe((status, err) {
+            if (err != null) debugPrint('CallService: realtime incoming subscribe error=$err');
+          });
+    };
 
     controller.onCancel = () async {
       await _client.removeChannel(channel);
+      _activeChannels.remove(channel);
+      await controller.close();
     };
 
+    _activeChannels.add(channel);
     return controller.stream;
+  }
+
+  Future<void> disposeAllChannels() async {
+    for (final channel in _activeChannels) {
+      await _client.removeChannel(channel);
+    }
+    _activeChannels.clear();
   }
 }

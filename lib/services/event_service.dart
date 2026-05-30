@@ -1,85 +1,235 @@
-import 'dart:convert';
+// ============================================================================
+// FICHIER: lib/services/event_service.dart
+// ============================================================================
+import 'package:flutter/foundation.dart'; // Ajouté pour debugPrint
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:thix_id/models/event_item.dart';
+import 'package:thix_id/models/event_registration.dart';
 
-class EventItem {
-  final String id;
-  final String title;
-  final String dateLabel;
-  final DateTime startsAt;
-  final String location;
-  final String price;
-  final String category;
-  final String attendeesLabel;
-  final String description;
-  final List<String> highlights;
-  final String imageAssetPath;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  final String userId;
-  final String status;
+class EventService {
+  final SupabaseClient _supabase;
 
-  EventItem({
-    required this.id,
-    required this.title,
-    required this.dateLabel,
-    required this.startsAt,
-    required this.location,
-    required this.price,
-    required this.category,
-    required this.attendeesLabel,
-    required this.description,
-    required this.highlights,
-    required this.imageAssetPath,
-    required this.createdAt,
-    required this.updatedAt,
-    this.userId = 'system',
-    this.status = 'active',
-  });
+  EventService(this._supabase);
 
-  // Convertit l'objet en Map pour l'enregistrement JSON
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'dateLabel': dateLabel,
-        'startsAt': startsAt.toIso8601String(),
-        'location': location,
-        'price': price,
-        'category': category,
-        'attendeesLabel': attendeesLabel,
-        'description': description,
-        'highlights': highlights,
-        'imageAssetPath': imageAssetPath,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-        'userId': userId,
-        'status': status,
+  // ==========================================================================
+  // ÉVÉNEMENTS
+  // ==========================================================================
+
+  /// Récupère les événements recommandés (limite optionnelle)
+  Future<List<EventItem>> getRecommendedEvents({int limit = 4}) async {
+    try {
+      final response = await _supabase
+          .from('events')
+          .select()
+          .eq('is_recommended', true)
+          .order('event_date', ascending: true)
+          .limit(limit);
+
+      return response.map((json) => EventItem.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Erreur getRecommendedEvents: $e');
+      return [];
+    }
+  }
+
+  /// Récupère les prochains événements (à venir, triés par date)
+  Future<List<EventItem>> getUpcomingEvents({int limit = 10}) async {
+    try {
+      final now = DateTime.now().toIso8601String();
+      final response = await _supabase
+          .from('events')
+          .select()
+          .gt('event_date', now)
+          .order('event_date', ascending: true)
+          .limit(limit);
+
+      return response.map((json) => EventItem.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Erreur getUpcomingEvents: $e');
+      return [];
+    }
+  }
+
+  /// Récupère tous les événements (pour la recherche)
+  Future<List<EventItem>> getAllEvents({String? category, String? search}) async {
+    try {
+      var query = _supabase.from('events').select();
+      if (category != null && category.isNotEmpty) {
+        query = query.eq('category', category);
+      }
+      if (search != null && search.isNotEmpty) {
+        query = query.ilike('title', '%$search%');
+      }
+      final response = await query.order('event_date', ascending: true);
+      return response.map((json) => EventItem.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Erreur getAllEvents: $e');
+      return [];
+    }
+  }
+
+  /// Récupère un événement par son ID
+  Future<EventItem?> getEventById(String eventId) async {
+    try {
+      final response = await _supabase
+          .from('events')
+          .select()
+          .eq('id', eventId)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return EventItem.fromJson(response);
+    } catch (e) {
+      debugPrint('Erreur getEventById: $e');
+      return null;
+    }
+  }
+
+  /// Récupère les catégories populaires (top 5 des plus utilisées)
+  Future<List<String>> getPopularCategories() async {
+    try {
+      final response = await _supabase
+          .from('events')
+          .select('category')
+          .limit(100);
+
+      final Map<String, int> counts = {};
+      for (var item in response) {
+        final cat = item['category'] as String?;
+        if (cat != null) {
+          counts[cat] = (counts[cat] ?? 0) + 1;
+        }
+      }
+      final sorted = counts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      return sorted.take(5).map((e) => e.key).toList();
+    } catch (e) {
+      debugPrint('Erreur getPopularCategories: $e');
+      return [
+        'Musique & Concerts',
+        'Conférences & Séminaires',
+        'Culture & Art',
+        'Sport & Loisirs',
+        'Festivals & Soirées',
+      ];
+    }
+  }
+
+  // ==========================================================================
+  // RÉSERVATIONS (TICKETS)
+  // ==========================================================================
+
+  /// Récupère toutes les réservations d'un utilisateur
+  Future<List<EventRegistration>> getUserRegistrations(String userId) async {
+    try {
+      final response = await _supabase
+          .from('thix_event_tickets')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      return response.map((json) => EventRegistration.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Erreur getUserRegistrations: $e');
+      return [];
+    }
+  }
+
+  /// Récupère une réservation par son ID
+  Future<EventRegistration?> getRegistrationById(String registrationId) async {
+    try {
+      final response = await _supabase
+          .from('thix_event_tickets')
+          .select()
+          .eq('id', registrationId)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return EventRegistration.fromJson(response);
+    } catch (e) {
+      debugPrint('Erreur getRegistrationById: $e');
+      return null;
+    }
+  }
+
+  /// Crée une nouvelle réservation
+  Future<String> createRegistration(Map<String, dynamic> registrationData,
+      {required String userId}) async {
+    try {
+      final data = {
+        ...registrationData,
+        'user_id': userId,
+        'status': 'valid',
+        'created_at': DateTime.now().toIso8601String(),
       };
+      final response = await _supabase
+          .from('thix_event_tickets')
+          .insert(data)
+          .select('ticket_code')
+          .single();
 
-  // Crée un objet depuis une Map
-  factory EventItem.fromJson(Map<String, dynamic> json) => EventItem(
-        id: json['id'],
-        title: json['title'],
-        dateLabel: json['dateLabel'],
-        startsAt: DateTime.parse(json['startsAt']),
-        location: json['location'],
-        price: json['price'],
-        category: json['category'],
-        attendeesLabel: json['attendeesLabel'],
-        description: json['description'],
-        highlights: List<String>.from(json['highlights']),
-        imageAssetPath: json['imageAssetPath'],
-        createdAt: DateTime.parse(json['createdAt']),
-        updatedAt: DateTime.parse(json['updatedAt']),
-        userId: json['userId'] ?? 'system',
-        status: json['status'] ?? 'active',
-      );
+      return response['ticket_code'] as String;
+    } catch (e) {
+      debugPrint('Erreur createRegistration: $e');
+      throw Exception('Impossible de créer la réservation: $e');
+    }
+  }
 
-  // Méthodes statiques pour gérer la liste (utilisées par ton EventService)
-  static String encodeList(List<EventItem> list) =>
-      json.encode(list.map((e) => e.toJson()).toList());
+  /// Annule une réservation
+  Future<void> cancelRegistration(String registrationId) async {
+    try {
+      await _supabase
+          .from('thix_event_tickets')
+          .update({'status': 'cancelled'})
+          .eq('id', registrationId);
+    } catch (e) {
+      debugPrint('Erreur cancelRegistration: $e');
+      throw Exception('Impossible d\'annuler la réservation: $e');
+    }
+  }
 
-  static List<EventItem> decodeList(String raw) {
-    if (raw.isEmpty) return [];
-    final list = json.decode(raw) as List;
-    return list.map((e) => EventItem.fromJson(e)).toList();
+  /// Vérifie si l'utilisateur a déjà un billet
+  Future<bool> hasUserTicket(String userId, String eventId) async {
+    try {
+      final response = await _supabase
+          .from('thix_event_tickets')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('event_id', eventId)
+          .eq('status', 'valid')
+          .maybeSingle();
+
+      return response != null;
+    } catch (e) {
+      debugPrint('Erreur hasUserTicket: $e');
+      return false;
+    }
+  }
+
+  // ==========================================================================
+  // CODES PROMO
+  // ==========================================================================
+
+  /// Valide un code promo
+  Future<double?> validatePromoCode(String code, String eventId) async {
+    try {
+      final response = await _supabase
+          .from('promo_codes')
+          .select()
+          .eq('code', code)
+          .eq('event_id', eventId)
+          .eq('is_active', true)
+          .maybeSingle();
+
+      if (response == null) return null;
+      final now = DateTime.now();
+      final validUntil = DateTime.parse(response['valid_until'] as String);
+      if (validUntil.isBefore(now)) return null;
+
+      return (response['discount_percent'] as num).toDouble();
+    } catch (e) {
+      debugPrint('Erreur validatePromoCode: $e');
+      return null;
+    }
   }
 }

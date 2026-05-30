@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:thix_id/auth/auth_controller.dart';
+import 'package:thix_id/l10n/app_localizations.dart';
 import 'package:thix_id/nav.dart';
 import 'package:thix_id/presentation/emergency/emergency_action_sheets.dart';
 import 'package:thix_id/services/emergency_service.dart';
@@ -72,8 +73,8 @@ class _EmergencyOverlayState extends State<EmergencyOverlay> with TickerProvider
           title: const Text('Connexion requise'),
           content: const Text('Vous devez être connecté pour envoyer une alerte et utiliser les fonctionnalités URGENCE.'),
           actions: [
-            TextButton(onPressed: () => context.pop(false), child: const Text('Annuler')),
-            FilledButton(onPressed: () => context.pop(true), child: const Text('Se connecter')),
+            TextButton(onPressed: () => context.pop(false), child: Text(context.loc.t('cancel'))),
+            FilledButton(onPressed: () => context.pop(true), child: Text(context.loc.t('login'))),
           ],
         );
       },
@@ -114,10 +115,12 @@ class _EmergencyOverlayState extends State<EmergencyOverlay> with TickerProvider
       // Best-effort: ensure we stop and upload audio when user closes the overlay.
       scheduleMicrotask(() async {
         await _service.stopLiveTracking();
+        await _service.stopLiveAudioStreaming();
         await _service.stopAndUploadAudioEvidence(alertId: id);
       });
     } else {
       _service.stopLiveTracking();
+      _service.stopLiveAudioStreaming();
     }
 
     try {
@@ -195,7 +198,9 @@ class _EmergencyOverlayState extends State<EmergencyOverlay> with TickerProvider
 
       if (critical) {
         setState(() => _status = 'Micro activé (enregistrement sécurisé)…');
-        await _service.startAudioEvidenceRecording(alertId: id);
+        // Stream small chunks to enable near real-time listening from Admin SOS.
+        // (Foreground-only; OS may pause in background.)
+        await _service.startLiveAudioStreaming(alertId: id, chunkDuration: const Duration(seconds: 10));
         await _maybeNotifyTrustedContactsForCritical(alertId: id);
         if (!_silentMode) {
           final phone = _adminPhones.isNotEmpty ? _adminPhones.first : EmergencyService.hotlineEmergency;
@@ -566,7 +571,7 @@ class _EmergencyOverlayState extends State<EmergencyOverlay> with TickerProvider
     final id = _activeAlertId;
     if (id == null) return;
     if (!kIsWeb) {
-      await _service.startAudioEvidenceRecording(alertId: id);
+      await _service.startLiveAudioStreaming(alertId: id, chunkDuration: const Duration(seconds: 10));
       if (mounted) setState(() => _status = 'Surveillance active: tracking + micro (foreground).');
     }
   }
@@ -594,6 +599,7 @@ class _EmergencyOverlayState extends State<EmergencyOverlay> with TickerProvider
     });
     try {
       await _service.stopLiveTracking();
+      await _service.stopLiveAudioStreaming();
       await _service.stopAndUploadAudioEvidence(alertId: id);
       if (mounted) setState(() => _status = 'Preuves envoyées.');
     } catch (e) {

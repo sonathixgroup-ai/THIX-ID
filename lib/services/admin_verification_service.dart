@@ -28,41 +28,48 @@ class AdminVerificationService {
   final SupabaseClient _client;
   AdminVerificationService({SupabaseClient? client}) : _client = client ?? SupabaseConfig.client;
 
-  static const formationsTable = 'formations';
-  static const experiencesTable = 'experiences';
-  static const profilesTable = 'profiles';
+  SupabaseClient get client => _client;
+
+  // New THIX ID schema (Supabase):
+  // - public.national_identity (identity submissions)
+  // - public.user_education_records (diplomas / trainings with evidence)
+  static const identityTable = 'national_identity';
+  static const educationTable = 'user_education_records';
 
   Future<List<VerificationQueueItem>> fetchQueue({int limit = 250}) async {
     final items = <VerificationQueueItem>[];
-    items.addAll(await _fetchLinked(table: formationsTable, limit: limit));
-    items.addAll(await _fetchLinked(table: experiencesTable, limit: limit));
+    items.addAll(await _fetchEducation(limit: limit));
     items.addAll(await _fetchIdentity(limit: limit));
     items.sort((a, b) => (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
     return items;
   }
 
-  Future<List<VerificationQueueItem>> _fetchLinked({required String table, required int limit}) async {
+  Future<List<VerificationQueueItem>> _fetchEducation({required int limit}) async {
     try {
-      final rows = await _client.from(table).select('id,user_id,payload,created_at,updated_at').order('created_at', ascending: false).limit(limit);
+      final rows = await _client
+          .from(educationTable)
+          .select('id,user_id,title,institution,degree,certificate_path,certificate_file_name,verification_status,created_at,updated_at')
+          .order('created_at', ascending: false)
+          .limit(limit);
       if (rows is! List) return const [];
       final list = rows.whereType<Map>().map((m) => m.cast<String, dynamic>()).toList(growable: false);
       return list.map((r) {
-        final payload = (r['payload'] is Map) ? (r['payload'] as Map).cast<String, dynamic>() : <String, dynamic>{};
-        final status = VerificationStatusX.parse(payload['verification_status'] ?? payload['verificationStatus']);
-        final title = (payload['name'] ?? payload['title'] ?? payload['degree'] ?? payload['company'] ?? payload['institution'] ?? '').toString().trim();
+        final status = VerificationStatusX.parse(r['verification_status']);
+        final title = (r['title'] ?? r['degree'] ?? '').toString().trim();
+        final inst = (r['institution'] ?? '').toString().trim();
         final createdAt = DateTime.tryParse((r['created_at'] ?? '').toString());
         return VerificationQueueItem(
-          table: table,
+          table: educationTable,
           linkedRowId: (r['id'] is int) ? r['id'] as int : int.tryParse((r['id'] ?? '').toString()),
           userId: (r['user_id'] ?? '').toString(),
-          title: title.isEmpty ? table : title,
-          payload: payload,
+          title: title.isEmpty ? (inst.isEmpty ? 'Formation' : inst) : title,
+          payload: r,
           status: status,
           createdAt: createdAt,
         );
       }).where((it) => it.status == VerificationStatus.pending).toList(growable: false);
     } catch (e) {
-      debugPrint('AdminVerificationService: fetch linked failed table=$table err=$e');
+      debugPrint('AdminVerificationService: fetch education failed err=$e');
       return const [];
     }
   }
@@ -70,32 +77,25 @@ class AdminVerificationService {
   Future<List<VerificationQueueItem>> _fetchIdentity({required int limit}) async {
     try {
       final rows = await _client
-          .from(profilesTable)
-          .select('id,full_name,display_name,national_id_number,id_document_type,id_document_front_doc_id,id_document_back_doc_id,id_document_selfie_doc_id,id_verification_status,updated_at')
+          .from(identityTable)
+          .select('id,user_id,full_name,document_type,national_id_number,front_path,back_path,selfie_path,status,rejection_reason,created_at,updated_at')
           .order('updated_at', ascending: false)
           .limit(limit);
       if (rows is! List) return const [];
       final list = rows.whereType<Map>().map((m) => m.cast<String, dynamic>()).toList(growable: false);
-      final out = <VerificationQueueItem>[];
-      for (final r in list) {
-        final status = VerificationStatusX.parse(r['id_verification_status']);
-        final hasDocs = [r['id_document_front_doc_id'], r['id_document_back_doc_id'], r['id_document_selfie_doc_id']].any((v) => (v ?? '').toString().trim().isNotEmpty);
-        if (!hasDocs) continue;
-        if (status != VerificationStatus.pending) continue;
-        final name = ((r['full_name'] ?? r['display_name']) ?? '').toString().trim();
-        out.add(
-          VerificationQueueItem(
-            table: profilesTable,
-            linkedRowId: null,
-            userId: (r['id'] ?? '').toString(),
-            title: name.isEmpty ? 'Identité nationale' : 'Identité — $name',
-            payload: r,
-            status: status,
-            createdAt: DateTime.tryParse((r['updated_at'] ?? '').toString()),
-          ),
+      return list.map((r) {
+        final status = VerificationStatusX.parse(r['status']);
+        final name = (r['full_name'] ?? '').toString().trim();
+        return VerificationQueueItem(
+          table: identityTable,
+          linkedRowId: (r['id'] is int) ? r['id'] as int : int.tryParse((r['id'] ?? '').toString()),
+          userId: (r['user_id'] ?? '').toString(),
+          title: name.isEmpty ? 'Identité nationale' : 'Identité — $name',
+          payload: r,
+          status: status,
+          createdAt: DateTime.tryParse((r['created_at'] ?? r['updated_at'] ?? '').toString()),
         );
-      }
-      return out;
+      }).where((it) => it.status == VerificationStatus.pending).toList(growable: false);
     } catch (e) {
       debugPrint('AdminVerificationService: fetch identity failed err=$e');
       return const [];
@@ -103,13 +103,40 @@ class AdminVerificationService {
   }
 
   Future<void> setStatus({required VerificationQueueItem item, required VerificationStatus status}) async {
-    if (item.table == profilesTable) {
-      await _client.from(profilesTable).update({'id_verification_status': status.value, 'updated_at': DateTime.now().toUtc().toIso8601String()}).eq('id', item.userId);
-      return;
-    }
     final id = item.linkedRowId;
     if (id == null) throw ArgumentError('Missing linkedRowId for ${item.table}');
-    final next = {...item.payload, 'verification_status': status.value, 'verified_at': DateTime.now().toUtc().toIso8601String()};
-    await _client.from(item.table).update({'payload': next, 'updated_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id);
+
+    if (item.table == identityTable) {
+      await _client.from(identityTable).update({
+        'status': status.value,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', id);
+
+      // Badge automation (best-effort): update public profile.
+      if (status == VerificationStatus.verified) {
+        try {
+          await _client.from('thix_public_profiles').update({
+            'account_status': 'verified',
+            'trust_level': 'verified',
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('user_id', item.userId);
+        } catch (e) {
+          debugPrint('AdminVerificationService: profile automation failed err=$e');
+        }
+      }
+      return;
+    }
+
+    if (item.table == educationTable) {
+      await _client.from(educationTable).update({
+        'verification_status': status.value,
+        'verified_at': status == VerificationStatus.verified ? DateTime.now().toUtc().toIso8601String() : null,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', id);
+      return;
+    }
+
+    // Unknown table; best-effort generic update.
+    await _client.from(item.table).update({'verification_status': status.value, 'updated_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id);
   }
 }

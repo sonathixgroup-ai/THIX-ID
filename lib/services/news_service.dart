@@ -124,6 +124,43 @@ class NewsService {
     }
   }
 
+  Future<void> updateNews({required String id, required NewsItem item}) async {
+    final safeId = id.trim();
+    if (safeId.isEmpty) throw Exception('News id requis.');
+    try {
+      await SupabaseService.update(
+        table,
+        _toRow(item, preferSubtitleColumn: true),
+        filters: {'id': safeId},
+      );
+    } catch (e) {
+      final msg = e.toString();
+      debugPrint('NewsService.updateNews failed err=$msg');
+
+      final missingSubtitle = msg.contains("Could not find the 'subtitle' column") || msg.contains('subtitle') && msg.contains('schema cache');
+      if (missingSubtitle) {
+        await SupabaseService.update(
+          table,
+          _toRow(item, preferSubtitleColumn: false),
+          filters: {'id': safeId},
+        );
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deleteNews({required String id}) async {
+    final safeId = id.trim();
+    if (safeId.isEmpty) return;
+    try {
+      await SupabaseService.delete(table, filters: {'id': safeId});
+    } catch (e) {
+      debugPrint('NewsService.deleteNews failed err=$e');
+      rethrow;
+    }
+  }
+
   List<NewsItem> _mapRows(List<Map<String, dynamic>> rows) {
     final now = DateTime.now();
     return rows.map((r) {

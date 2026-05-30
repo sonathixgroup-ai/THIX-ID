@@ -23,6 +23,7 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
   List<NewsItem> _items = const [];
 
   bool get _canCreate => AdminRbacService.canAccess(role: widget.role, minLevel: 5);
+  bool get _canManage => AdminRbacService.canAccess(role: widget.role, minLevel: 5);
 
   @override
   void initState() {
@@ -48,15 +49,45 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
     }
   }
 
-  Future<void> _create() async {
-    if (!_canCreate) return;
-    final created = await showModalBottomSheet<bool>(
+  Future<void> _openUpsert({NewsItem? initial}) async {
+    if (!_canManage) return;
+    final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _CreateNewsSheet(),
+      builder: (_) => _UpsertNewsSheet(initial: initial),
     );
-    if (created == true) await _load();
+    if (changed == true) await _load();
+  }
+
+  Future<void> _delete(NewsItem item) async {
+    if (!_canManage) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AdminCyberColors.panel,
+        title: Text('Supprimer', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AdminCyberColors.text)),
+        content: Text('Supprimer cette publication ?', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AdminCyberColors.textDim)),
+        actions: [
+          TextButton(onPressed: () => context.pop(false), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => context.pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminCyberColors.danger, elevation: 0),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _service.deleteNews(id: item.id);
+      if (!mounted) return;
+      await _load();
+    } catch (e) {
+      debugPrint('AdminNewsPage: delete failed err=$e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur suppression: $e')));
+    }
   }
 
   @override
@@ -73,7 +104,12 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
                   ? const Center(child: CircularProgressIndicator(color: Colors.white))
                   : (_error != null)
                       ? _ErrorState(error: _error!, onRetry: _load)
-                      : _List(items: _items),
+                    : _List(
+                        items: _items,
+                        canManage: _canManage,
+                        onEdit: (item) => _openUpsert(initial: item),
+                        onDelete: _delete,
+                      ),
             ),
           ],
         ),
@@ -87,7 +123,7 @@ class _AdminNewsPageState extends State<AdminNewsPage> {
                 heroTag: 'create_news_fab',
                 backgroundColor: AdminCyberColors.electricBlue,
                 foregroundColor: Colors.white,
-                onPressed: _create,
+                onPressed: () => _openUpsert(initial: null),
                 icon: const Icon(Icons.add_rounded, color: Colors.white),
                 label: const Text('Publier une info'),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -136,7 +172,10 @@ class _Header extends StatelessWidget {
 
 class _List extends StatelessWidget {
   final List<NewsItem> items;
-  const _List({required this.items});
+  final bool canManage;
+  final ValueChanged<NewsItem> onEdit;
+  final ValueChanged<NewsItem> onDelete;
+  const _List({required this.items, required this.canManage, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -146,14 +185,17 @@ class _List extends StatelessWidget {
     return ListView.separated(
       itemCount: items.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, i) => _Tile(item: items[i]),
+      itemBuilder: (context, i) => _Tile(item: items[i], canManage: canManage, onEdit: onEdit, onDelete: onDelete),
     );
   }
 }
 
 class _Tile extends StatelessWidget {
   final NewsItem item;
-  const _Tile({required this.item});
+  final bool canManage;
+  final ValueChanged<NewsItem> onEdit;
+  final ValueChanged<NewsItem> onDelete;
+  const _Tile({required this.item, required this.canManage, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -190,6 +232,22 @@ class _Tile extends StatelessWidget {
                       child: Text(item.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AdminCyberColors.text), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
                     if (item.featured) _Pill(text: 'À la une', color: AdminCyberColors.neonCyan),
+                    if (canManage) ...[
+                      const SizedBox(width: 6),
+                      PopupMenuButton<String>(
+                        tooltip: 'Actions',
+                        color: AdminCyberColors.panelHi,
+                        icon: const Icon(Icons.more_horiz_rounded, color: AdminCyberColors.textDim),
+                        onSelected: (v) {
+                          if (v == 'edit') onEdit(item);
+                          if (v == 'delete') onDelete(item);
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(value: 'edit', child: Text('Modifier')),
+                          PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -232,14 +290,16 @@ class _Pill extends StatelessWidget {
   }
 }
 
-class _CreateNewsSheet extends StatefulWidget {
-  const _CreateNewsSheet();
+class _UpsertNewsSheet extends StatefulWidget {
+  const _UpsertNewsSheet({required this.initial});
+
+  final NewsItem? initial;
 
   @override
-  State<_CreateNewsSheet> createState() => _CreateNewsSheetState();
+  State<_UpsertNewsSheet> createState() => _UpsertNewsSheetState();
 }
 
-class _CreateNewsSheetState extends State<_CreateNewsSheet> {
+class _UpsertNewsSheetState extends State<_UpsertNewsSheet> {
   final _title = TextEditingController();
   final _subtitle = TextEditingController();
   final _source = TextEditingController(text: 'THIX');
@@ -251,6 +311,23 @@ class _CreateNewsSheetState extends State<_CreateNewsSheet> {
   bool _featured = false;
   bool _saving = false;
   String? _error;
+
+  bool get _isEdit => widget.initial != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final i = widget.initial;
+    if (i != null) {
+      _title.text = i.title;
+      _subtitle.text = i.subtitle;
+      _source.text = i.source;
+      _uploadedImageUrl = i.imageUrl;
+      _category = i.category;
+      _severity = i.severity;
+      _featured = i.featured;
+    }
+  }
 
   @override
   void dispose() {
@@ -313,8 +390,9 @@ class _CreateNewsSheetState extends State<_CreateNewsSheet> {
     });
 
     final now = DateTime.now();
+    final existing = widget.initial;
     final item = NewsItem(
-      id: 'tmp',
+      id: existing?.id ?? 'tmp',
       title: title,
       subtitle: _subtitle.text.trim(),
       source: _source.text.trim().isEmpty ? 'THIX' : _source.text.trim(),
@@ -322,12 +400,17 @@ class _CreateNewsSheetState extends State<_CreateNewsSheet> {
       severity: _severity,
       featured: _featured,
       imageUrl: _uploadedImageUrl,
-      createdAt: now,
+      createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     );
 
     try {
-      await NewsService().createNews(item);
+      final svc = NewsService();
+      if (_isEdit) {
+        await svc.updateNews(id: item.id, item: item);
+      } else {
+        await svc.createNews(item);
+      }
       if (!mounted) return;
       context.pop(true);
     } catch (e) {
@@ -358,7 +441,7 @@ class _CreateNewsSheetState extends State<_CreateNewsSheet> {
           children: [
             Row(
               children: [
-                Expanded(child: Text('Publier une info', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AdminCyberColors.text))),
+                Expanded(child: Text(_isEdit ? 'Modifier une info' : 'Publier une info', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AdminCyberColors.text))),
                 IconButton(onPressed: () => context.pop(false), icon: const Icon(Icons.close_rounded, color: AdminCyberColors.textDim)),
               ],
             ),
@@ -410,7 +493,7 @@ class _CreateNewsSheetState extends State<_CreateNewsSheet> {
                 icon: _saving
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.publish_rounded, color: Colors.white),
-                label: const Text('Publier'),
+                label: Text(_isEdit ? 'Enregistrer' : 'Publier'),
               ),
             ),
             const SizedBox(height: 6),
