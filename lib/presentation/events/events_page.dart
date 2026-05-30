@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+// Vos modèles et services
 import 'package:thix_id/models/event_item.dart';
 import 'package:thix_id/services/event_service.dart';
-import 'package:thix_id/models/event_item.dart';
+
 
 // ============================================================================
 // CONSTANTES (pour remplacer Routes manquant)
