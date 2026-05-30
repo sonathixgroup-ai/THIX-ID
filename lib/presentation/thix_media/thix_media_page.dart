@@ -1,54 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:video_player/video_player.dart';
 import 'video_player_page.dart';
+import '../../models/media_content.dart';
+import '../../services/media_service.dart';
 
-// Couleurs
+// Couleurs (inchangées)
 const Color kBackgroundColor = Color(0xFFFBFBFD);
 const Color kAccentColor = Color(0xFF7A4DF3);
 const Color kHeaderIconColor = Color(0xFF6A7788);
-
-// Modèle de contenu média (identique à la structure de la table)
-class MediaItem {
-  final String id;
-  final String title;
-  final String? subtitle;
-  final String type;
-  final String? year;
-  final String coverUrl;
-  final String videoUrl;
-  final int viewCount;
-  final int? rankPosition; // pour les tendances
-
-  MediaItem({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.type,
-    required this.year,
-    required this.coverUrl,
-    required this.videoUrl,
-    this.viewCount = 0,
-    this.rankPosition,
-  });
-
-  factory MediaItem.fromJson(Map<String, dynamic> json) {
-    return MediaItem(
-      id: json['id'].toString(),
-      title: json['title'] ?? '',
-      subtitle: json['subtitle'],
-      type: json['type'] ?? '',
-      year: json['year'],
-      coverUrl: json['cover_url'] ?? '',
-      videoUrl: json['video_url'] ?? '',
-      viewCount: json['view_count'] ?? 0,
-      rankPosition: json['rank_position'],
-    );
-  }
-
-  // Pour l'affichage du rang (#1, #2...)
-  String get rankDisplay => rankPosition != null ? '#$rankPosition' : '';
-}
 
 class ThixMediaPage extends StatefulWidget {
   const ThixMediaPage({super.key});
@@ -58,8 +18,8 @@ class ThixMediaPage extends StatefulWidget {
 }
 
 class _ThixMediaPageState extends State<ThixMediaPage> {
-  final SupabaseClient _supabase = Supabase.instance.client;
-  List<MediaItem> _allMedia = [];
+  late MediaService _mediaService;
+  List<MediaContent> _allMedia = [];
   bool _isLoading = true;
   String? _error;
 
@@ -70,28 +30,17 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
   @override
   void initState() {
     super.initState();
+    _mediaService = MediaService(Supabase.instance.client);
     _loadMedia();
   }
 
   Future<void> _loadMedia() async {
     try {
-      final response = await _supabase
-          .from('media_contents')
-          .select('*')
-          .eq('is_published', true)
-          .order('created_at', ascending: false);
-      if (response is List) {
-        final items = response.map((json) => MediaItem.fromJson(json)).toList();
-        setState(() {
-          _allMedia = items;
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _error = 'Format de données invalide';
-          _isLoading = false;
-        });
-      }
+      final media = await _mediaService.fetchPublishedMedia();
+      setState(() {
+        _allMedia = media;
+        _isLoading = false;
+      });
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -100,32 +49,17 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
     }
   }
 
-  // Filtrage selon la catégorie et la recherche
-  List<MediaItem> get _filteredTrending {
-    var list = _allMedia.where((item) => item.rankPosition != null).toList();
-    if (_searchQuery.isNotEmpty) {
-      list = list.where((item) => item.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-    }
-    return list;
-  }
+  // Filtrage
+  List<MediaContent> get _filteredTrending =>
+      _allMedia.where((item) => item.rankPosition != null).toList();
 
-  List<MediaItem> get _filteredRecommendations {
-    var list = _allMedia.where((item) => item.rankPosition == null && item.type != 'Vidéo').toList();
-    if (_searchQuery.isNotEmpty) {
-      list = list.where((item) => item.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-    }
-    return list;
-  }
+  List<MediaContent> get _filteredRecommendations =>
+      _allMedia.where((item) => item.rankPosition == null && item.type != 'Vidéo').toList();
 
-  List<MediaItem> get _filteredNewReleases {
-    var list = _allMedia.where((item) => item.year == '2024').toList();
-    if (_searchQuery.isNotEmpty) {
-      list = list.where((item) => item.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-    }
-    return list;
-  }
+  List<MediaContent> get _filteredNewReleases =>
+      _allMedia.where((item) => item.year == '2024').toList();
 
-  void _navigateToVideo(MediaItem item) {
+  void _navigateToVideo(MediaContent item) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -155,7 +89,102 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
 
     return Scaffold(
       backgroundColor: kBackgroundColor,
-      appBar: PreferredSize(
+      appBar: _buildAppBar(),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildCategoryChips(),
+            const SizedBox(height: 20),
+            if (_selectedCategory == 'Accueil') ...[
+              _buildFeatureBanner(),
+              const SizedBox(height: 24),
+            ],
+            if (_selectedCategory == 'Accueil') ...[
+              const _SectionHeader(title: 'Tendances', showSeeAll: true, onSeeAll: () => _showAll('Tendances')),
+              const SizedBox(height: 12),
+              _TrendingList(items: _filteredTrending, onItemTap: _navigateToVideo),
+              const SizedBox(height: 24),
+            ],
+            if (_selectedCategory == 'Accueil')
+              const _SectionHeader(title: 'Recommandé pour vous', showSeeAll: true, onSeeAll: () => _showAll('Recommandations'))
+            else
+              _SectionHeader(
+                title: 'Recommandations ($_selectedCategory)',
+                showSeeAll: true,
+                onSeeAll: () => _showAll('Recommandations'),
+              ),
+            const SizedBox(height: 12),
+            _RecommendationGrid(
+              items: _filteredRecommendations
+                  .where((item) => _selectedCategory == 'Accueil' || item.type == _selectedCategory)
+                  .toList(),
+              onItemTap: _navigateToVideo,
+            ),
+            const SizedBox(height: 24),
+            if (_selectedCategory == 'Accueil') ...[
+              _buildPremiumBanner(),
+              const SizedBox(height: 24),
+            ],
+            if (_selectedCategory == 'Accueil')
+              const _SectionHeader(title: 'Nouveautés', showSeeAll: true, onSeeAll: () => _showAll('Nouveautés'))
+            else
+              _SectionHeader(
+                title: 'Nouveautés ($_selectedCategory)',
+                showSeeAll: true,
+                onSeeAll: () => _showAll('Nouveautés'),
+              ),
+            const SizedBox(height: 12),
+            _NewReleasesGrid(
+              items: _filteredNewReleases
+                  .where((item) => _selectedCategory == 'Accueil' || item.type == _selectedCategory)
+                  .toList(),
+              onItemTap: _navigateToVideo,
+            ),
+          ],
+        ),
+      ),
+      // ==================== RACCOURCIS EN BAS ====================
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: 0,
+        selectedItemColor: kAccentColor,
+        unselectedItemColor: Colors.grey,
+        onTap: (index) {
+          // Actions rapides : redirection vers d'autres pages du thix
+          switch (index) {
+            case 0:
+              // Déjà sur Accueil, on peut remonter en haut
+              break;
+            case 1:
+              // Recherche (ouvrir une page de recherche avancée ou focus search bar)
+              FocusScope.of(context).requestFocus(FocusNode());
+              break;
+            case 2:
+              // Favoris (à développer)
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Favoris à venir')));
+              break;
+            case 3:
+              // Profil (rediriger vers profil)
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil à venir')));
+              break;
+          }
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Accueil'),
+          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Rechercher'),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite_border), label: 'Favoris'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profil'),
+        ],
+      ),
+    );
+  }
+
+  // ==================== CONSTRUCTEURS DE L'UI (inchangés ou légèrement adaptés) ====================
+
+  PreferredSizeWidget _buildAppBar() => PreferredSize(
         preferredSize: const Size.fromHeight(70),
         child: Container(
           decoration: const BoxDecoration(
@@ -173,17 +202,9 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
                     children: const [
                       Text(
                         'THIX MEDIA',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                          color: kAccentColor,
-                          letterSpacing: 0.5,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: kAccentColor, letterSpacing: 0.5),
                       ),
-                      Text(
-                        'Regardez. Écoutez. Vibrez.',
-                        style: TextStyle(fontSize: 10, color: Colors.grey),
-                      ),
+                      Text('Regardez. Écoutez. Vibrez.', style: TextStyle(fontSize: 10, color: Colors.grey)),
                     ],
                   ),
                   const SizedBox(width: 16),
@@ -203,9 +224,7 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
                           Expanded(
                             child: TextField(
                               controller: _searchController,
-                              onChanged: (value) {
-                                setState(() => _searchQuery = value);
-                              },
+                              onChanged: (value) => setState(() => _searchQuery = value),
                               decoration: const InputDecoration(
                                 hintText: 'Rechercher un film, une série...',
                                 border: InputBorder.none,
@@ -215,11 +234,8 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
                           ),
                           Container(
                             padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Icon(Icons.tune, size: 18, color: Colors.grey),
+                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                            child: const Icon(Icons.tune, size: 18, color: Colors.grey),
                           ),
                         ],
                       ),
@@ -233,146 +249,36 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
                       Container(
                         width: 14,
                         height: 14,
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: const Center(
-                          child: Text('3', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
-                        ),
+                        decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                        child: const Center(child: Text('3', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold))),
                       ),
                     ],
                   ),
                   const SizedBox(width: 12),
-                  const CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Colors.grey,
-                    child: Icon(Icons.person_outline, color: Colors.white),
-                  ),
+                  const CircleAvatar(radius: 18, backgroundColor: Colors.grey, child: Icon(Icons.person_outline, color: Colors.white)),
                 ],
               ),
             ),
           ),
         ),
-      ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      );
+
+  Widget _buildCategoryChips() => SizedBox(
+        height: 40,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
           children: [
-            // Chips de catégories
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                children: [
-                  _MediaChip(
-                    label: 'Accueil',
-                    selected: _selectedCategory == 'Accueil',
-                    onTap: () => setState(() => _selectedCategory = 'Accueil'),
-                  ),
-                  _MediaChip(
-                    label: 'Vidéos',
-                    icon: Icons.video_library_outlined,
-                    selected: _selectedCategory == 'Vidéos',
-                    onTap: () => setState(() => _selectedCategory = 'Vidéos'),
-                  ),
-                  _MediaChip(
-                    label: 'Films',
-                    icon: Icons.movie_outlined,
-                    selected: _selectedCategory == 'Films',
-                    onTap: () => setState(() => _selectedCategory = 'Films'),
-                  ),
-                  _MediaChip(
-                    label: 'Séries',
-                    icon: Icons.tv_outlined,
-                    selected: _selectedCategory == 'Séries',
-                    onTap: () => setState(() => _selectedCategory = 'Séries'),
-                  ),
-                  _MediaChip(
-                    label: 'Musique',
-                    icon: Icons.music_note_outlined,
-                    selected: _selectedCategory == 'Musique',
-                    onTap: () => setState(() => _selectedCategory = 'Musique'),
-                  ),
-                  _MediaChip(
-                    label: 'Playlists',
-                    icon: Icons.playlist_play_outlined,
-                    selected: _selectedCategory == 'Playlists',
-                    onTap: () => setState(() => _selectedCategory = 'Playlists'),
-                  ),
-                  _MediaChip(
-                    label: 'En direct',
-                    icon: Icons.live_tv_outlined,
-                    selected: _selectedCategory == 'En direct',
-                    onTap: () => setState(() => _selectedCategory = 'En direct'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Bannière (seulement pour Accueil)
-            if (_selectedCategory == 'Accueil') ...[
-              _buildFeatureBanner(),
-              const SizedBox(height: 24),
-            ],
-
-            // Tendances (uniquement pour Accueil)
-            if (_selectedCategory == 'Accueil') ...[
-              const _SectionHeader(title: 'Tendances', showSeeAll: true, onSeeAll: () => _showAll('Tendances')),
-              const SizedBox(height: 12),
-              _TrendingList(
-                items: _filteredTrending,
-                onItemTap: _navigateToVideo,
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            // Recommandations (selon catégorie)
-            if (_selectedCategory == 'Accueil')
-              const _SectionHeader(title: 'Recommandé pour vous', showSeeAll: true, onSeeAll: () => _showAll('Recommandations')),
-            else
-              _SectionHeader(
-                title: 'Recommandations ($_selectedCategory)',
-                showSeeAll: true,
-                onSeeAll: () => _showAll('Recommandations'),
-              ),
-            const SizedBox(height: 12),
-            _RecommendationGrid(
-              items: _filteredRecommendations.where((item) => _selectedCategory == 'Accueil' || item.type == _selectedCategory).toList(),
-              onItemTap: _navigateToVideo,
-            ),
-            const SizedBox(height: 24),
-
-            // Bannière Premium (seulement pour Accueil)
-            if (_selectedCategory == 'Accueil') ...[
-              _buildPremiumBanner(),
-              const SizedBox(height: 24),
-            ],
-
-            // Nouveautés (selon catégorie)
-            if (_selectedCategory == 'Accueil')
-              const _SectionHeader(title: 'Nouveautés', showSeeAll: true, onSeeAll: () => _showAll('Nouveautés')),
-            else
-              _SectionHeader(
-                title: 'Nouveautés ($_selectedCategory)',
-                showSeeAll: true,
-                onSeeAll: () => _showAll('Nouveautés'),
-              ),
-            const SizedBox(height: 12),
-            _NewReleasesGrid(
-              items: _filteredNewReleases.where((item) => _selectedCategory == 'Accueil' || item.type == _selectedCategory).toList(),
-              onItemTap: _navigateToVideo,
-            ),
+            _MediaChip(label: 'Accueil', selected: _selectedCategory == 'Accueil', onTap: () => setState(() => _selectedCategory = 'Accueil')),
+            _MediaChip(label: 'Vidéos', icon: Icons.video_library_outlined, selected: _selectedCategory == 'Vidéos', onTap: () => setState(() => _selectedCategory = 'Vidéos')),
+            _MediaChip(label: 'Films', icon: Icons.movie_outlined, selected: _selectedCategory == 'Films', onTap: () => setState(() => _selectedCategory = 'Films')),
+            _MediaChip(label: 'Séries', icon: Icons.tv_outlined, selected: _selectedCategory == 'Séries', onTap: () => setState(() => _selectedCategory = 'Séries')),
+            _MediaChip(label: 'Musique', icon: Icons.music_note_outlined, selected: _selectedCategory == 'Musique', onTap: () => setState(() => _selectedCategory = 'Musique')),
+            _MediaChip(label: 'Playlists', icon: Icons.playlist_play_outlined, selected: _selectedCategory == 'Playlists', onTap: () => setState(() => _selectedCategory = 'Playlists')),
+            _MediaChip(label: 'En direct', icon: Icons.live_tv_outlined, selected: _selectedCategory == 'En direct', onTap: () => setState(() => _selectedCategory = 'En direct')),
           ],
         ),
-      ),
-    );
-  }
+      );
 
   Widget _buildFeatureBanner() {
     final heritageItem = _allMedia.firstWhere(
@@ -383,61 +289,35 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
       height: 250,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        image: const DecorationImage(
-          image: NetworkImage('https://picsum.photos/id/20/800/400'),
-          fit: BoxFit.cover,
-        ),
+        image: const DecorationImage(image: NetworkImage('https://picsum.photos/id/20/800/400'), fit: BoxFit.cover),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Row(
-            children: [
-              const Spacer(),
-              _buildSliderDot(true),
-              _buildSliderDot(false),
-              _buildSliderDot(false),
-              _buildSliderDot(false),
-              const Spacer(),
-            ],
-          ),
+          Row(children: [const Spacer(), _buildSliderDot(true), _buildSliderDot(false), _buildSliderDot(false), _buildSliderDot(false), const Spacer()]),
           const Spacer(),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.4),
-              borderRadius: BorderRadius.circular(12),
-            ),
+            decoration: BoxDecoration(color: Colors.black.withOpacity(0.4), borderRadius: BorderRadius.circular(12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: kAccentColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  decoration: BoxDecoration(color: kAccentColor, borderRadius: BorderRadius.circular(20)),
                   child: const Text('NOUVEAUTÉ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  "L’HÉRITAGE SAISON 1",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5),
-                ),
+                const Text("L’HÉRITAGE SAISON 1", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.5)),
                 const SizedBox(height: 4),
-                const Text(
-                  "Une histoire. Un combat. Un héritage.",
-                  style: TextStyle(fontSize: 14, color: Colors.white70),
-                ),
+                const Text("Une histoire. Un combat. Un héritage.", style: TextStyle(fontSize: 14, color: Colors.white70)),
                 const SizedBox(height: 16),
                 Row(
                   children: [
                     ElevatedButton.icon(
-                      onPressed: () {
-                        if (heritageItem != null) _navigateToVideo(heritageItem);
-                      },
+                      onPressed: () => heritageItem != null ? _navigateToVideo(heritageItem) : null,
                       icon: const Icon(Icons.play_arrow, size: 18),
                       label: const Text('Regarder maintenant', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
@@ -470,60 +350,47 @@ class _ThixMediaPageState extends State<ThixMediaPage> {
     );
   }
 
-  Widget _buildPremiumBanner() {
-    return Container(
-      height: 130,
-      decoration: BoxDecoration(
-        image: const DecorationImage(
-          image: NetworkImage('https://picsum.photos/id/30/800/300'),
-          fit: BoxFit.cover,
+  Widget _buildPremiumBanner() => Container(
+        height: 130,
+        decoration: BoxDecoration(
+          image: const DecorationImage(image: NetworkImage('https://picsum.photos/id/30/800/300'), fit: BoxFit.cover),
+          borderRadius: BorderRadius.circular(20),
         ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 16),
-          const Icon(Icons.stars_rounded, color: Colors.amber, size: 48),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Text('THIX MEDIA Premium', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
-                SizedBox(height: 6),
-                Text('Accédez à tout le contenu sans publicité,\ntéléchargez et regardez hors ligne.', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
-              ],
+        child: Row(
+          children: [
+            const SizedBox(width: 16),
+            const Icon(Icons.stars_rounded, color: Colors.amber, size: 48),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Text('THIX MEDIA Premium', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
+                  SizedBox(height: 6),
+                  Text('Accédez à tout le contenu sans publicité,\ntéléchargez et regardez hors ligne.', style: TextStyle(fontSize: 12, color: Colors.white70, height: 1.4)),
+                ],
+              ),
             ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: kAccentColor,
-              borderRadius: BorderRadius.circular(10),
+            Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(color: kAccentColor, borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
             ),
-            child: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
 
-  Widget _buildSliderDot(bool active) {
-    return Container(
-      width: active ? 16 : 8,
-      height: 8,
-      margin: const EdgeInsets.symmetric(horizontal: 3),
-      decoration: BoxDecoration(
-        color: active ? kAccentColor : Colors.white30,
-        borderRadius: BorderRadius.circular(10),
-      ),
-    );
-  }
+  Widget _buildSliderDot(bool active) => Container(
+        width: active ? 16 : 8,
+        height: 8,
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        decoration: BoxDecoration(color: active ? kAccentColor : Colors.white30, borderRadius: BorderRadius.circular(10)),
+      );
 }
 
-// ==================== WIDGETS PRIVÉS (inchangés sauf l'utilisation de rankDisplay) ====================
+// ==================== WIDGETS RÉUTILISABLES (adaptés pour MediaContent) ====================
 
 class _MediaChip extends StatelessWidget {
   final String label;
@@ -533,35 +400,26 @@ class _MediaChip extends StatelessWidget {
   const _MediaChip({required this.label, this.selected = false, this.icon, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(right: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? kAccentColor : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? Colors.transparent : Colors.grey.shade200),
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.only(right: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? kAccentColor : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: selected ? Colors.transparent : Colors.grey.shade200),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) Icon(icon, size: 16, color: selected ? Colors.white : kHeaderIconColor),
+              if (icon != null) const SizedBox(width: 8),
+              Text(label, style: TextStyle(color: selected ? Colors.white : kHeaderIconColor, fontWeight: selected ? FontWeight.w600 : FontWeight.normal, fontSize: 13)),
+            ],
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) Icon(icon, size: 16, color: selected ? Colors.white : kHeaderIconColor),
-            if (icon != null) const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected ? Colors.white : kHeaderIconColor,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+      );
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -571,30 +429,22 @@ class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title, this.showSeeAll = false, this.onSeeAll});
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A), letterSpacing: 0.5)),
-        if (showSeeAll)
-          GestureDetector(
-            onTap: onSeeAll,
-            child: Row(
-              children: const [
-                Text('Voir tout', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
-                SizedBox(width: 4),
-                Icon(Icons.arrow_forward_ios, size: 10, color: Colors.grey),
-              ],
+  Widget build(BuildContext context) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A), letterSpacing: 0.5)),
+          if (showSeeAll)
+            GestureDetector(
+              onTap: onSeeAll,
+              child: const Row(children: [Text('Voir tout', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)), SizedBox(width: 4), Icon(Icons.arrow_forward_ios, size: 10, color: Colors.grey)]),
             ),
-          ),
-      ],
-    );
-  }
+        ],
+      );
 }
 
 class _TrendingList extends StatelessWidget {
-  final List<MediaItem> items;
-  final Function(MediaItem) onItemTap;
+  final List<MediaContent> items;
+  final Function(MediaContent) onItemTap;
   const _TrendingList({required this.items, required this.onItemTap});
 
   @override
@@ -634,10 +484,7 @@ class _TrendingList extends StatelessWidget {
                       Container(
                         margin: const EdgeInsets.all(8),
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
+                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(6)),
                         child: Text(item.rankDisplay, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.white)),
                       ),
                     ],
@@ -664,8 +511,8 @@ class _TrendingList extends StatelessWidget {
 }
 
 class _RecommendationGrid extends StatelessWidget {
-  final List<MediaItem> items;
-  final Function(MediaItem) onItemTap;
+  final List<MediaContent> items;
+  final Function(MediaContent) onItemTap;
   const _RecommendationGrid({required this.items, required this.onItemTap});
 
   @override
@@ -706,10 +553,7 @@ class _RecommendationGrid extends StatelessWidget {
                         Container(
                           margin: const EdgeInsets.all(8),
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: kAccentColor,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
+                          decoration: BoxDecoration(color: kAccentColor, borderRadius: BorderRadius.circular(6)),
                           child: const Text('NOUVEAU', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9, color: Colors.white)),
                         ),
                     ],
@@ -736,8 +580,8 @@ class _RecommendationGrid extends StatelessWidget {
 }
 
 class _NewReleasesGrid extends StatelessWidget {
-  final List<MediaItem> items;
-  final Function(MediaItem) onItemTap;
+  final List<MediaContent> items;
+  final Function(MediaContent) onItemTap;
   const _NewReleasesGrid({required this.items, required this.onItemTap});
 
   @override
