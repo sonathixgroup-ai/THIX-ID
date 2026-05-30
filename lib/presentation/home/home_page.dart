@@ -451,10 +451,12 @@ class _HomePagePremiumState extends State<HomePagePremium>
                           mainAxisSpacing: 5,
                           childAspectRatio: 0.92,
                           children: [
-                            _ServiceItem(
+                            _ServiceCard(
   icon: Icons.play_circle_filled,
-  label: 'THIX MEDIA',
-  onTap: () => context.push('/thix-media'),
+  title: 'THIX MEDIA',
+  iconBackgroundColor: Colors.blue.shade50,
+  iconColor: Colors.blue,
+  onTap: () => context.push(AppRoutes.thixMedia),
 ),
                             _ServiceCard(
   icon: Icons.storefront_rounded,
