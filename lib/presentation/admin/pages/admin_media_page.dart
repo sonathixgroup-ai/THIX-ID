@@ -34,7 +34,6 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
   bool _isRecommended = false;
   bool _isPublished = true;
 
-  // Fichiers locaux pour upload
   File? _selectedCoverFile;
   File? _selectedVideoFile;
 
@@ -62,17 +61,17 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
   }
 
   Future<void> _pickCoverFile() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final result = await FilePicker.pickFiles(type: FileType.image); // ✅ corrigé
     if (result != null && result.files.single.path != null) {
       setState(() {
         _selectedCoverFile = File(result.files.single.path!);
-        _coverUrlController.text = _selectedCoverFile!.path; // affichage temporaire
+        _coverUrlController.text = _selectedCoverFile!.path;
       });
     }
   }
 
   Future<void> _pickVideoFile() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.video);
+    final result = await FilePicker.pickFiles(type: FileType.video); // ✅ corrigé
     if (result != null && result.files.single.path != null) {
       setState(() {
         _selectedVideoFile = File(result.files.single.path!);
@@ -85,14 +84,12 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
     if (!_formKey.currentState!.validate()) return;
     try {
       if (_isEditing && _editingItem != null) {
-        // Mise à jour avec remplacement éventuel de fichiers
         await _mediaService.updateWithFiles(
           _editingItem!,
           newCoverFile: _selectedCoverFile,
           newVideoFile: _selectedVideoFile,
         );
       } else {
-        // Nouveau média avec upload
         final newItem = MediaContent(
           id: '',
           title: _titleController.text,
@@ -225,7 +222,6 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
                 TextFormField(controller: _typeController, decoration: const InputDecoration(labelText: 'Type (Musique, Film...) *'),
                     validator: (v) => v == null || v.isEmpty ? 'Requis' : null),
                 TextFormField(controller: _yearController, decoration: const InputDecoration(labelText: 'Année')),
-                // Choix du fichier image
                 ListTile(
                   leading: const Icon(Icons.image),
                   title: Text(_selectedCoverFile == null ? 'Aucun fichier image' : _selectedCoverFile!.path.split('/').last),
@@ -234,9 +230,7 @@ class _AdminMediaPageState extends State<AdminMediaPage> {
                     child: const Text('Choisir image'),
                   ),
                 ),
-                // Champ URL manuel (fallback)
                 TextFormField(controller: _coverUrlController, decoration: const InputDecoration(labelText: 'URL de couverture (si pas de fichier)')),
-                // Choix du fichier vidéo
                 ListTile(
                   leading: const Icon(Icons.video_file),
                   title: Text(_selectedVideoFile == null ? 'Aucun fichier vidéo' : _selectedVideoFile!.path.split('/').last),
