@@ -2,6 +2,7 @@ import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:thix_id/models/event_item.dart';
 import 'package:thix_id/models/event_registration.dart';
 import 'package:thix_id/nav.dart';
@@ -19,7 +20,13 @@ class EventTicketPage extends StatefulWidget {
 }
 
 class _EventTicketPageState extends State<EventTicketPage> {
-  final _eventService = EventService();
+  late final EventService _eventService;
+
+  @override
+  void initState() {
+    super.initState();
+    _eventService = EventService(Supabase.instance.client);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,10 +48,14 @@ class _EventTicketPageState extends State<EventTicketPage> {
                   children: [
                     const _TicketTopBar(),
                     const Spacer(),
-                    Text('Billet introuvable.', style: context.textStyles.titleMedium?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w800)),
+                    Text('Billet introuvable.',
+                        style: context.textStyles.titleMedium?.copyWith(
+                            color: context.theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w800)),
                     const SizedBox(height: AppSpacing.lg),
                     FilledButton(
-                      onPressed: () => context.popOrGo('/events/${widget.eventId}'),
+                      onPressed: () =>
+                          context.popOrGo('/events/${widget.eventId}'),
                       child: const Text('Retour à l’événement'),
                     ),
                     const Spacer(),
@@ -60,9 +71,14 @@ class _EventTicketPageState extends State<EventTicketPage> {
                 children: [
                   _TicketTopBar(eventId: widget.eventId),
                   const SizedBox(height: AppSpacing.md),
-                  Text('Billet', style: context.textStyles.titleLarge?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w900)),
+                  Text('Billet',
+                      style: context.textStyles.titleLarge?.copyWith(
+                          color: context.theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w900)),
                   const SizedBox(height: AppSpacing.xs),
-                  Text('Présente ce code à la porte.', style: context.textStyles.bodyMedium?.copyWith(color: LightModeColors.secondaryText, height: 1.5)),
+                  Text('Présente ce code à la porte.',
+                      style: context.textStyles.bodyMedium?.copyWith(
+                          color: LightModeColors.secondaryText, height: 1.5)),
                   const SizedBox(height: AppSpacing.lg),
                   _TicketCard(event: bundle.event, reg: bundle.reg),
                   const SizedBox(height: AppSpacing.lg),
@@ -70,7 +86,8 @@ class _EventTicketPageState extends State<EventTicketPage> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => context.go('/events/${widget.eventId}'),
+                          onPressed: () =>
+                              context.go('/events/${widget.eventId}'),
                           icon: const Icon(Icons.event_rounded),
                           label: const Text('Détails'),
                         ),
@@ -79,10 +96,10 @@ class _EventTicketPageState extends State<EventTicketPage> {
                       Expanded(
                         child: FilledButton.icon(
                           onPressed: () {
-                            // Placeholder: dans une version Supabase complète,
-                            // on ferait ici un refresh / validation serveur.
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Billet prêt. Montre le code à l’entrée.')),
+                              const SnackBar(
+                                  content: Text(
+                                      'Billet prêt. Montre le code à l’entrée.')),
                             );
                           },
                           icon: const Icon(Icons.verified_rounded),
@@ -102,9 +119,10 @@ class _EventTicketPageState extends State<EventTicketPage> {
 
   Future<_TicketBundle?> _load() async {
     try {
-      final event = await _eventService.fetchEvent(widget.eventId);
-      final reg = await _eventService.fetchRegistrationById(widget.registrationId);
+      final event = await _eventService.getEventById(widget.eventId);
+      final reg = await _eventService.getRegistrationById(widget.registrationId);
       if (event == null || reg == null) return null;
+      // Vérification que la réservation correspond bien à l'événement
       if (reg.eventId != event.id) return null;
       return _TicketBundle(event: event, reg: reg);
     } catch (e) {
@@ -123,11 +141,15 @@ class _TicketTopBar extends StatelessWidget {
     return Row(
       children: [
         IconButton(
-          onPressed: () => context.popOrGo(eventId == null ? AppRoutes.events : '/events/$eventId'),
+          onPressed: () => context.popOrGo(
+              eventId == null ? AppRoutes.events : '/events/$eventId'),
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
         ),
         Expanded(
-          child: Text('THIX Ticket', style: context.textStyles.titleLarge?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w900)),
+          child: Text('THIX Ticket',
+              style: context.textStyles.titleLarge?.copyWith(
+                  color: context.theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w900)),
         ),
       ],
     );
@@ -146,7 +168,8 @@ class _TicketCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: LightModeColors.accent.withValues(alpha: 0.50), width: 1.5),
+        border: Border.all(
+            color: LightModeColors.accent.withValues(alpha: 0.50), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -156,12 +179,17 @@ class _TicketCard extends StatelessWidget {
               const Icon(Icons.shield_rounded, color: LightModeColors.success),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text(event.title, style: context.textStyles.titleMedium?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w900)),
+                child: Text(event.title,
+                    style: context.textStyles.titleMedium?.copyWith(
+                        color: context.theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w900)),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text('${event.dateLabel} • ${event.location}', style: context.textStyles.bodyMedium?.copyWith(color: LightModeColors.secondaryText, height: 1.5)),
+          Text('${_formatDate(event.eventDate)} • ${event.location}',
+              style: context.textStyles.bodyMedium?.copyWith(
+                  color: LightModeColors.secondaryText, height: 1.5)),
           const SizedBox(height: AppSpacing.lg),
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -181,14 +209,20 @@ class _TicketCard extends StatelessWidget {
                     width: 520,
                     height: 96,
                     color: context.theme.colorScheme.onSurface,
-                    errorBuilder: (context, error) => Text('Barcode error: $error', style: context.textStyles.bodySmall?.copyWith(color: context.theme.colorScheme.error)),
+                    errorBuilder: (context, error) => Text(
+                        'Barcode error: $error',
+                        style: context.textStyles.bodySmall?.copyWith(
+                            color: context.theme.colorScheme.error)),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 SelectableText(
                   reg.ticketCode,
                   textAlign: TextAlign.center,
-                  style: context.textStyles.titleSmall?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                  style: context.textStyles.titleSmall?.copyWith(
+                      color: context.theme.colorScheme.onSurface,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8),
                 ),
               ],
             ),
@@ -205,27 +239,39 @@ class _TicketCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppRadius.full),
                   color: LightModeColors.success.withValues(alpha: 0.12),
-                  border: Border.all(color: LightModeColors.success.withValues(alpha: 0.35)),
+                  border: Border.all(
+                      color: LightModeColors.success.withValues(alpha: 0.35)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.check_circle_rounded, size: 18, color: LightModeColors.success),
+                    const Icon(Icons.check_circle_rounded,
+                        size: 18, color: LightModeColors.success),
                     const SizedBox(width: AppSpacing.xs),
-                    Text('Valide', style: context.textStyles.labelLarge?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w800)),
+                    Text('Valide',
+                        style: context.textStyles.labelLarge?.copyWith(
+                            color: context.theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w800)),
                   ],
                 ),
               ),
               const Spacer(),
-              Text('ID: ${reg.id}', style: context.textStyles.labelSmall?.copyWith(color: LightModeColors.secondaryText)),
+              Text('ID: ${reg.id}',
+                  style: context.textStyles.labelSmall
+                      ?.copyWith(color: LightModeColors.secondaryText)),
             ],
           ),
         ],
       ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 }
 
@@ -241,11 +287,16 @@ class _TicketMetaRow extends StatelessWidget {
       children: [
         SizedBox(
           width: 92,
-          child: Text(label, style: context.textStyles.labelLarge?.copyWith(color: LightModeColors.secondaryText, fontWeight: FontWeight.w700)),
+          child: Text(label,
+              style: context.textStyles.labelLarge?.copyWith(
+                  color: LightModeColors.secondaryText,
+                  fontWeight: FontWeight.w700)),
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: SelectableText(value, style: context.textStyles.bodyMedium?.copyWith(color: context.theme.colorScheme.onSurface, height: 1.4)),
+          child: SelectableText(value,
+              style: context.textStyles.bodyMedium?.copyWith(
+                  color: context.theme.colorScheme.onSurface, height: 1.4)),
         ),
       ],
     );
