@@ -20,9 +20,16 @@ class FirebaseAuthManager implements AuthManager {
   StreamSubscription<fb.User?>? _sub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _profileSub;
 
-  FirebaseAuthManager({fb.FirebaseAuth? auth, FirebaseFirestore? db}) : _auth = auth ?? fb.FirebaseAuth.instance, _db = db ?? FirebaseFirestore.instance;
+  FirebaseAuthManager({fb.FirebaseAuth? auth, FirebaseFirestore? db})
+      : _auth = auth ?? fb.FirebaseAuth.instance,
+        _db = db ?? FirebaseFirestore.instance;
 
-  Future<void> _logSecurityEvent({required String uid, required String type, String? label, Map<String, dynamic>? meta}) async {
+  Future<void> _logSecurityEvent({
+    required String uid,
+    required String type,
+    String? label,
+    Map<String, dynamic>? meta,
+  }) async {
     try {
       await _db.collection('users').doc(uid).collection('security_events').add({
         'type': type,
@@ -43,8 +50,6 @@ class FirebaseAuthManager implements AuthManager {
 
   @override
   Future<void> init() async {
-    // Web persistence helps prevent unexpected auth resets and reduces
-    // some platform-channel edge cases.
     if (kIsWeb) {
       try {
         await _auth.setPersistence(fb.Persistence.LOCAL);
@@ -80,7 +85,11 @@ class FirebaseAuthManager implements AuthManager {
   }
 
   @override
-  Future<AppUser> signInWithEmailOrThixId({required String identifier, required String password, required bool rememberMe}) async {
+  Future<AppUser> signInWithEmailOrThixId({
+    required String identifier,
+    required String password,
+    required bool rememberMe,
+  }) async {
     final id = identifier.trim();
     if (id.isEmpty) throw AuthException('Identifiant requis.');
     if (password.isEmpty) throw AuthException('Mot de passe requis.');
@@ -123,8 +132,6 @@ class FirebaseAuthManager implements AuthManager {
     }
     if (password.trim().length < 8) throw AuthException('Le mot de passe doit contenir au moins 8 caractères.');
 
-    // If user typed a phone number into the "email" field we can't create phone+password
-    // in Firebase Auth. We guide to phone flow handled in UI.
     if (_looksLikePhone(normalizedEmail)) {
       throw AuthException('Inscription par téléphone: utilisez la vérification SMS.');
     }
@@ -134,7 +141,6 @@ class FirebaseAuthManager implements AuthManager {
       final uid = cred.user?.uid;
       if (uid == null) throw AuthException('Création du compte échouée.');
 
-      // THIX UID is assigned only after payment activation.
       final thixId = 'THIX-PENDING';
       final now = DateTime.now();
       final userDoc = AppUser(
@@ -343,6 +349,29 @@ class FirebaseAuthManager implements AuthManager {
     }
   }
 
+  // ==========================================================================
+  // MÉTHODE MANQUANTE updateCurrentUser (implémentation de AuthManager)
+  // ==========================================================================
+
+  @override
+  Future<void> updateCurrentUser(AppUser user) async {
+    final current = currentUser;
+    if (current == null) throw AuthException('Session expirée.');
+    if (current.id != user.id) throw AuthException('Utilisateur courant différent.');
+
+    try {
+      await _db.collection('users').doc(user.id).set(user.toFirestore(), SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('FirebaseAuthManager: updateCurrentUser failed uid=${user.id} err=$e');
+      throw AuthException('Impossible de mettre à jour le profil.');
+    }
+    _currentUser.value = user;
+  }
+
+  // ==========================================================================
+  // MÉTHODES PRIVÉES
+  // ==========================================================================
+
   Future<String?> _emailForThixId(String thixId) async {
     final normalized = thixId.trim().toUpperCase();
     final q = await _db.collection('users').where('thixId', isEqualTo: normalized).limit(1).get();
@@ -375,7 +404,6 @@ class FirebaseAuthManager implements AuthManager {
       case 'operation-not-allowed':
         return 'Méthode de connexion non activée. Activez Email/Mot de passe (ou Téléphone) dans Firebase Auth.';
       default:
-        // Preserve any server-provided details when available.
         final msg = (e.message ?? '').trim();
         if (msg.isNotEmpty) return 'Erreur d’authentification (${e.code}): $msg';
         return 'Erreur d’authentification (${e.code}).';
@@ -383,31 +411,29 @@ class FirebaseAuthManager implements AuthManager {
   }
 
   Future<String> _generateUniqueThixId({required String uid}) async {
-  // Supprimez la ligne suivante si inutile
-  // final cc = ThixIdService.inferCountryCode();
-  for (var i = 0; i < 24; i++) {
-    final candidate = ThixIdService.generate(); // ← suppression de countryCode
-    final index = _db.collection('thix_ids').doc(candidate);
-    try {
-      await _db.runTransaction((tx) async {
-        final snap = await tx.get(index);
-        if (snap.exists) throw Exception('duplicate');
-        tx.set(
-          index,
-          {
-            'uid': uid,
-            'thixId': candidate,
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      });
-      return candidate;
-    } catch (_) {
-      continue;
+    for (var i = 0; i < 24; i++) {
+      final candidate = ThixIdService.generate();
+      final index = _db.collection('thix_ids').doc(candidate);
+      try {
+        await _db.runTransaction((tx) async {
+          final snap = await tx.get(index);
+          if (snap.exists) throw Exception('duplicate');
+          tx.set(
+            index,
+            {
+              'uid': uid,
+              'thixId': candidate,
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+        });
+        return candidate;
+      } catch (_) {
+        continue;
+      }
     }
+    return ThixIdService.generate();
   }
-  return ThixIdService.generate(); // ← suppression également ici
-}
 }
