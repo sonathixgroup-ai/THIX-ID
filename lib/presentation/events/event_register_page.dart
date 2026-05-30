@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:thix_id/auth/auth_controller.dart';
 import 'package:thix_id/nav.dart';
 import 'package:thix_id/services/event_service.dart';
@@ -18,7 +19,7 @@ class EventRegisterPage extends StatefulWidget {
 }
 
 class _EventRegisterPageState extends State<EventRegisterPage> {
-  final _eventService = EventService();
+  final _eventService = EventService(Supabase.instance.client);
   final _profileService = ProfileService();
   final _thixCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
@@ -51,21 +52,58 @@ class _EventRegisterPageState extends State<EventRegisterPage> {
     });
 
     try {
+      // 1. Valider le THIX ID
       final canonical = ThixIdService.canonicalizeOrNull(_thixCtrl.text);
       if (canonical == null || !ThixIdService.isValid(canonical)) {
         setState(() => _error = 'THIX ID invalide. Exemple: ${ThixIdService.exampleV2}');
         return;
       }
 
+      // 2. Vérifier que le profil existe (optionnel mais recommandé)
       final profile = await _profileService.fetchPublicProfileByThixId(canonical);
       if (profile == null) {
         setState(() => _error = 'Aucun profil trouvé pour ce THIX ID.');
         return;
       }
 
-      final reg = await _eventService.register(eventId: widget.eventId, attendeeThixId: canonical, tickets: _tickets, note: _noteCtrl.text);
+      // 3. Récupérer l'userId du profil (ou de l'auth actuel)
+      final auth = context.read<AuthController>();
+      final userId = auth.currentUser?.id;
+      if (userId == null) {
+        setState(() => _error = 'Vous devez être connecté.');
+        return;
+      }
+
+      // 4. Créer la réservation via createRegistration
+      final registrationData = {
+        'event_id': widget.eventId,
+        'attendee_thix_id': canonical,
+        'ticket_code': 'THIX-${DateTime.now().millisecondsSinceEpoch}',
+        'tickets': _tickets,
+        'note': _noteCtrl.text.trim(),
+        'status': 'valid',
+        'created_at': DateTime.now().toIso8601String(),
+      };
+
+      final ticketCode = await _eventService.createRegistration(
+        registrationData,
+        userId: userId,
+      );
+
+      if (ticketCode.isEmpty) {
+        throw Exception('Création échouée');
+      }
+
+      // 5. Récupérer l'ID de la réservation (le service ne le retourne pas directement,
+      //    mais on peut le retrouver via getTicketByCode)
+      final ticket = await _eventService.getTicketByCode(ticketCode);
+      final registrationId = ticket?['id']?.toString();
+      if (registrationId == null) {
+        throw Exception('Impossible de récupérer le billet');
+      }
+
       if (!mounted) return;
-      context.go('/events/${widget.eventId}/ticket/${reg.id}');
+      context.go('/events/${widget.eventId}/ticket/$registrationId');
     } catch (e) {
       debugPrint('EventRegisterPage.submit failed err=$e');
       if (!mounted) return;
@@ -81,7 +119,7 @@ class _EventRegisterPageState extends State<EventRegisterPage> {
       backgroundColor: context.theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: FutureBuilder(
-          future: _eventService.fetchEvent(widget.eventId),
+          future: _eventService.getEventById(widget.eventId), // ✅ corrigé
           builder: (context, snap) {
             final event = snap.data;
             if (snap.connectionState != ConnectionState.done) {
@@ -94,7 +132,9 @@ class _EventRegisterPageState extends State<EventRegisterPage> {
                   children: [
                     _TopBar(eventId: widget.eventId),
                     const Spacer(),
-                    Text('Événement introuvable.', style: context.textStyles.titleMedium?.copyWith(color: context.theme.colorScheme.onSurface)),
+                    Text('Événement introuvable.',
+                        style: context.textStyles.titleMedium
+                            ?.copyWith(color: context.theme.colorScheme.onSurface)),
                     const SizedBox(height: AppSpacing.lg),
                     SizedBox(
                       width: double.infinity,
@@ -116,26 +156,40 @@ class _EventRegisterPageState extends State<EventRegisterPage> {
                 children: [
                   _TopBar(eventId: widget.eventId),
                   const SizedBox(height: AppSpacing.md),
-                  Text('Inscription', style: context.textStyles.titleLarge?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w900)),
+                  Text('Inscription',
+                      style: context.textStyles.titleLarge?.copyWith(
+                          color: context.theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w900)),
                   const SizedBox(height: AppSpacing.xs),
-                  Text(event.title, style: context.textStyles.titleMedium?.copyWith(color: LightModeColors.secondaryText, fontWeight: FontWeight.w700)),
+                  Text(event.title,
+                      style: context.textStyles.titleMedium?.copyWith(
+                          color: LightModeColors.secondaryText,
+                          fontWeight: FontWeight.w700)),
                   const SizedBox(height: AppSpacing.lg),
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     decoration: BoxDecoration(
                       color: context.theme.colorScheme.surface,
                       borderRadius: BorderRadius.circular(AppRadius.xl),
-                      border: Border.all(color: LightModeColors.accent.withValues(alpha: 0.45), width: 1.5),
+                      border: Border.all(
+                          color: LightModeColors.accent.withValues(alpha: 0.45),
+                          width: 1.5),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.verified_user_rounded, color: LightModeColors.success),
+                            const Icon(Icons.verified_user_rounded,
+                                color: LightModeColors.success),
                             const SizedBox(width: AppSpacing.sm),
                             Expanded(
-                              child: Text('THIX ID requis', style: context.textStyles.titleSmall?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w800)),
+                              child: Text('THIX ID requis',
+                                  style: context.textStyles.titleSmall
+                                      ?.copyWith(
+                                          color: context
+                                              .theme.colorScheme.onSurface,
+                                          fontWeight: FontWeight.w800)),
                             ),
                           ],
                         ),
@@ -156,23 +210,41 @@ class _EventRegisterPageState extends State<EventRegisterPage> {
                         Row(
                           children: [
                             Expanded(
-                              child: Text('Billets', style: context.textStyles.titleSmall?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w800)),
+                              child: Text('Billets',
+                                  style: context.textStyles.titleSmall
+                                      ?.copyWith(
+                                          color: context
+                                              .theme.colorScheme.onSurface,
+                                          fontWeight: FontWeight.w800)),
                             ),
                             IconButton(
-                              onPressed: _loading || _tickets <= 1 ? null : () => setState(() => _tickets -= 1),
+                              onPressed: _loading || _tickets <= 1
+                                  ? null
+                                  : () => setState(() => _tickets -= 1),
                               icon: const Icon(Icons.remove_circle_outline_rounded),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.md,
+                                  vertical: AppSpacing.sm),
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(AppRadius.full),
-                                border: Border.all(color: context.theme.dividerColor),
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.full),
+                                border: Border.all(
+                                    color: context.theme.dividerColor),
                                 color: context.theme.scaffoldBackgroundColor,
                               ),
-                              child: Text('$_tickets', style: context.textStyles.titleSmall?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w900)),
+                              child: Text('$_tickets',
+                                  style: context.textStyles.titleSmall
+                                      ?.copyWith(
+                                          color: context
+                                              .theme.colorScheme.onSurface,
+                                          fontWeight: FontWeight.w900)),
                             ),
                             IconButton(
-                              onPressed: _loading ? null : () => setState(() => _tickets += 1),
+                              onPressed: _loading
+                                  ? null
+                                  : () => setState(() => _tickets += 1),
                               icon: const Icon(Icons.add_circle_outline_rounded),
                             ),
                           ],
@@ -190,7 +262,10 @@ class _EventRegisterPageState extends State<EventRegisterPage> {
                         ),
                         if (_error != null) ...[
                           const SizedBox(height: AppSpacing.md),
-                          Text(_error!, style: context.textStyles.bodyMedium?.copyWith(color: context.theme.colorScheme.error, fontWeight: FontWeight.w700)),
+                          Text(_error!,
+                              style: context.textStyles.bodyMedium?.copyWith(
+                                  color: context.theme.colorScheme.error,
+                                  fontWeight: FontWeight.w700)),
                         ],
                         const SizedBox(height: AppSpacing.lg),
                         SizedBox(
@@ -198,9 +273,15 @@ class _EventRegisterPageState extends State<EventRegisterPage> {
                           child: FilledButton.icon(
                             onPressed: _loading ? null : _submit,
                             icon: _loading
-                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2))
                                 : const Icon(Icons.lock_open_rounded),
-                            label: Text(_loading ? 'Validation…' : 'Confirmer mon inscription'),
+                            label: Text(_loading
+                                ? 'Validation…'
+                                : 'Confirmer mon inscription'),
                           ),
                         ),
                       ],
@@ -229,7 +310,10 @@ class _TopBar extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
         ),
         Expanded(
-          child: Text('THIX Register', style: context.textStyles.titleLarge?.copyWith(color: context.theme.colorScheme.onSurface, fontWeight: FontWeight.w900)),
+          child: Text('THIX Register',
+              style: context.textStyles.titleLarge?.copyWith(
+                  color: context.theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w900)),
         ),
       ],
     );
