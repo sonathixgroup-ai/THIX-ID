@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // ← ajout
 import 'package:thix_id/nav.dart';
 import 'package:thix_id/services/event_service.dart';
 import 'package:thix_id/theme.dart';
@@ -14,7 +15,13 @@ class EventDetailsPage extends StatefulWidget {
 }
 
 class _EventDetailsPageState extends State<EventDetailsPage> {
-  final _service = EventService(Supabase.instance.client);
+  late final EventService _service;
+
+  @override
+  void initState() {
+    super.initState();
+    _service = EventService(Supabase.instance.client); // ← correction ligne 17
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +29,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       backgroundColor: context.theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: FutureBuilder(
-          future: _service.getEventById(widget.eventId), // ✅ corrigé
+          future: _service.getEventById(widget.eventId),
           builder: (context, snap) {
             final event = snap.data;
             if (snap.connectionState != ConnectionState.done) {
@@ -166,7 +173,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           icon: Icons.location_on_rounded,
                           label: event.location),
                       _InfoPill(
-                          _InfoPill(icon: Icons.payments_rounded, label: event.price?.toString() ?? 'Gratuit'),
+                          icon: Icons.payments_rounded,
+                          label: event.price?.toString() ?? 'Gratuit'), // ← correction ligne 169
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -257,9 +265,9 @@ class _TopBar extends StatelessWidget {
 }
 
 class _InfoPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _InfoPill({required this.icon, required this.label});
+  final IconData icon;   // ← nommé
+  final String label;    // ← nommé
+  const _InfoPill({required this.icon, required this.label}); // ← constructeur correct
 
   @override
   Widget build(BuildContext context) {
