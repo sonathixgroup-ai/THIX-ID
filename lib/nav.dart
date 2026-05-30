@@ -44,7 +44,57 @@ import 'package:thix_id/presentation/thix_market/thix_market_page.dart';
 import 'package:thix_id/presentation/thix_sante/thix_sante_page.dart';
 import 'package:thix_id/presentation/thix_reservation/thix_reservation_page.dart';
 import 'package:thix_id/presentation/thix_money/thix_money_page.dart';
-import 'package:thix_id/presentation/thix_media/thix_media_page.dart'; // ✅ THIX MEDIA
+import 'package:thix_id/presentation/thix_media/thix_media_page.dart';
+import 'package:thix_id/presentation/admin/pages/admin_media_page.dart';
+
+/// Page sans transition (utilisée par GoRouter)
+class NoTransitionPage<T> extends Page<T> {
+  final Widget child;
+  const NoTransitionPage({required this.child, super.key});
+
+  @override
+  Route<T> createRoute(BuildContext context) {
+    return MaterialPageRoute(builder: (context) => child, settings: this);
+  }
+}
+
+class AppRoutes {
+  static const String home = '/';
+  static const String login = '/login';
+  static const String personalReg = '/personal-reg';
+  static const String enterpriseReg = '/enterprise-reg';
+  static const String enterprise = '/enterprise';
+  static const String payment = '/payment';
+  static const String activationReceipt = '/activation-receipt';
+  static const String publicProfile = '/public-profile';
+  static const String userDashboard = '/user-dashboard';
+  static const String enterpriseDashboard = '/enterprise-dashboard';
+  static const String enterprisePortalBasePath = '/company';
+  static const String chat = '/chat';
+  static const String vault = '/vault';
+  static const String settings = '/settings';
+  static const String network = '/network';
+  static const String jobs = '/jobs';
+  static const String jobDashboard = '/jobs/dashboard';
+  static const String recruiter = '/recruiter';
+  static const String opportunities = '/opportunities';
+  static const String events = '/events';
+  static const String education = '/education';
+  static const String trainingHome = '/training';
+  static const String trainingDetailsBasePath = '/training-details';
+  static const String learningDashboard = '/learn';
+  static const String lessonPlayer = '/learn/player';
+  static const String admin = '/admin';
+  static const String thixMarket = '/market';
+  static const String thixSante = '/sante';
+  static const String reservation = '/reservation';
+  static const String thixMoney = '/thix-money';
+  static const String thixMedia = '/thix-media';
+  static const String adminMedia = '/admin/media';
+
+  static String enterprisePortalBase(String slug) => '$enterprisePortalBasePath/$slug';
+  static String enterprisePortalDashboard(String slug, String section) => '/company/$slug/dashboard/$section';
+}
 
 class AppRouter {
   static GoRouter create(AuthController auth, {Listenable? extraRefreshListenable}) {
@@ -55,9 +105,12 @@ class AppRouter {
       redirect: (context, state) {
         final location = state.matchedLocation;
         final isLoggedIn = auth.isAuthenticated;
-        final isAuthPage = location == AppRoutes.login || location == AppRoutes.personalReg || location == AppRoutes.enterpriseReg;
+        final isAuthPage = location == AppRoutes.login ||
+            location == AppRoutes.personalReg ||
+            location == AppRoutes.enterpriseReg;
         final isAdmin = location == AppRoutes.admin || location.startsWith('${AppRoutes.admin}/');
-        final isEnterprisePortal = location.startsWith('${AppRoutes.enterprisePortalBasePath}/') || location == AppRoutes.enterprisePortalBasePath;
+        final isEnterprisePortal = location.startsWith('${AppRoutes.enterprisePortalBasePath}/') ||
+            location == AppRoutes.enterprisePortalBasePath;
         final isPublic = location == AppRoutes.home ||
             location == AppRoutes.publicProfile ||
             location == AppRoutes.jobs ||
@@ -70,9 +123,7 @@ class AppRouter {
         final isProtected = !isPublic && !isAuthPage;
         if (!isLoggedIn && isProtected) return AppRoutes.login;
 
-        if (isAdmin) {
-          if (!isLoggedIn) return AppRoutes.login;
-        }
+        if (isAdmin && !isLoggedIn) return AppRoutes.login;
 
         if (isLoggedIn) {
           final u = auth.currentUser;
@@ -104,16 +155,12 @@ class AppRouter {
         GoRoute(
           path: AppRoutes.home,
           name: 'home',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: HomePagePremium(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: HomePagePremium()),
         ),
         GoRoute(
           path: AppRoutes.login,
           name: 'login',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: LoginPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: LoginPage()),
         ),
         GoRoute(
           path: AppRoutes.personalReg,
@@ -127,9 +174,7 @@ class AppRouter {
         GoRoute(
           path: AppRoutes.enterpriseReg,
           name: 'enterpriseReg',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: EnterpriseRegistrationPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: EnterpriseRegistrationPage()),
         ),
         GoRoute(
           path: AppRoutes.payment,
@@ -166,16 +211,12 @@ class AppRouter {
         GoRoute(
           path: AppRoutes.userDashboard,
           name: 'userDashboard',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: UserDashboardPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: UserDashboardPage()),
         ),
         GoRoute(
           path: AppRoutes.enterpriseDashboard,
           name: 'enterpriseDashboard',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: EnterpriseDashboardPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: EnterpriseDashboardPage()),
         ),
         GoRoute(
           path: AppRoutes.enterprise,
@@ -226,30 +267,22 @@ class AppRouter {
         GoRoute(
           path: AppRoutes.chat,
           name: 'chat',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: ThixChatPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixChatPage()),
         ),
         GoRoute(
           path: AppRoutes.vault,
           name: 'vault',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: DocumentVaultPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: DocumentVaultPage()),
         ),
         GoRoute(
           path: AppRoutes.settings,
           name: 'settings',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: SettingsPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: SettingsPage()),
         ),
         GoRoute(
           path: AppRoutes.network,
           name: 'network',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: NetworkPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: NetworkPage()),
         ),
         // ==================== THIX MARKET ====================
         GoRoute(
@@ -269,7 +302,7 @@ class AppRouter {
           name: 'thixMoney',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixMoneyPage()),
         ),
-        // ==================== THIX MEDIA (remplace Incubateur) ====================
+        // ==================== THIX MEDIA ====================
         GoRoute(
           path: AppRoutes.thixMedia,
           name: 'thixMedia',
@@ -281,33 +314,27 @@ class AppRouter {
           name: 'reservation',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixReservationPage()),
         ),
+        // ==================== JOBS ====================
         GoRoute(
           path: AppRoutes.jobs,
           name: 'jobs',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: JobsPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: JobsPage()),
         ),
         GoRoute(
           path: AppRoutes.jobDashboard,
           name: 'jobDashboard',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: JobDashboardPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: JobDashboardPage()),
         ),
         GoRoute(
           path: AppRoutes.recruiter,
           name: 'recruiter',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: RecruiterPortalPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: RecruiterPortalPage()),
         ),
+        // ==================== OPPORTUNITÉS ====================
         GoRoute(
           path: AppRoutes.opportunities,
           name: 'opportunities',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: OpportunitiesPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: OpportunitiesPage()),
         ),
         GoRoute(
           path: '/opportunities/:opportunityId',
@@ -326,6 +353,7 @@ class AppRouter {
             return NoTransitionPage(child: OpportunityApplyPage(opportunityId: opportunityId));
           },
         ),
+        // ==================== JOBS DETAILS ====================
         GoRoute(
           path: '/jobs/:jobId',
           name: 'jobDetails',
@@ -343,12 +371,11 @@ class AppRouter {
             return NoTransitionPage(child: JobApplyPage(jobId: jobId));
           },
         ),
+        // ==================== ÉVÉNEMENTS ====================
         GoRoute(
           path: AppRoutes.events,
           name: 'events',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: EventsPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: EventsPage()),
         ),
         GoRoute(
           path: '/events/:eventId',
@@ -381,13 +408,13 @@ class AppRouter {
           name: 'userEventsDashboard',
           pageBuilder: (context, state) => const NoTransitionPage(child: UserEventDashboardPage()),
         ),
+        // ==================== ÉDUCATION ====================
         GoRoute(
           path: AppRoutes.education,
           name: 'education',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: EducationPage(),
-          ),
+          pageBuilder: (context, state) => const NoTransitionPage(child: EducationPage()),
         ),
+        // ==================== FORMATIONS ====================
         GoRoute(
           path: AppRoutes.trainingHome,
           name: 'trainingHome',
@@ -414,6 +441,7 @@ class AppRouter {
             return NoTransitionPage(child: LessonPlayerPage(enrollmentId: id));
           },
         ),
+        // ==================== ADMIN ====================
         GoRoute(
           path: '${AppRoutes.admin}/:module',
           name: 'admin',
@@ -427,47 +455,15 @@ class AppRouter {
           name: 'adminRoot',
           redirect: (_, __) => '${AppRoutes.admin}/${AdminModule.overview.slug}',
         ),
+        // ==================== ADMIN MÉDIA ====================
+        GoRoute(
+          path: AppRoutes.adminMedia,
+          name: 'adminMedia',
+          pageBuilder: (context, state) => const NoTransitionPage(child: AdminMediaPage()),
+        ),
       ],
     );
   }
-}
-
-class AppRoutes {
-  static const String home = '/';
-  static const String login = '/login';
-  static const String personalReg = '/personal-reg';
-  static const String enterpriseReg = '/enterprise-reg';
-  static const String enterprise = '/enterprise';
-  static const String payment = '/payment';
-  static const String activationReceipt = '/activation-receipt';
-  static const String publicProfile = '/public-profile';
-  static const String userDashboard = '/user-dashboard';
-  static const String enterpriseDashboard = '/enterprise-dashboard';
-  static const String enterprisePortalBasePath = '/company';
-  static String enterprisePortalBase(String slug) => '${enterprisePortalBasePath}/$slug';
-  static String enterprisePortalDashboard(String slug, String section) => '/company/$slug/dashboard/$section';
-  static const String chat = '/chat';
-  static const String vault = '/vault';
-  static const String settings = '/settings';
-  static const String network = '/network';
-  static const String jobs = '/jobs';
-  static const String jobDashboard = '/jobs/dashboard';
-  static const String recruiter = '/recruiter';
-  static const String opportunities = '/opportunities';
-  static const String events = '/events';
-  static const String education = '/education';
-  static const String trainingHome = '/training';
-  static const String trainingDetailsBasePath = '/training-details';
-  static const String trainingDetails = '/training-details';
-  static const String learningDashboard = '/learn';
-  static const String lessonPlayer = '/learn/player';
-  static const String admin = '/admin';
-  static const String thixMarket = '/market';
-  static const String thixSante = '/sante';
-  static const String reservation = '/reservation';
-  static String get thixMoney => '/thix-money';
-  static String get thixMedia => '/thix-media';
-  // static String get incubator => '/incubator'; // ❌ supprimé (remplacé par thixMedia)
 }
 
 extension GoRouterBackHelpers on BuildContext {
