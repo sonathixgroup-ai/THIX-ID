@@ -44,6 +44,20 @@ import 'package:thix_id/presentation/thix_money/thix_money_page.dart';
 import 'package:thix_id/presentation/thix_media/thix_media_page.dart';
 import 'package:thix_id/presentation/admin/pages/admin_media_page.dart';
 
+/// Page sans transition (utilisée pour les routes GoRouter)
+class NoTransitionPage<T> extends Page<T> {
+  final Widget child;
+  const NoTransitionPage({required this.child, super.key});
+
+  @override
+  Route<T> createRoute(BuildContext context) {
+    return MaterialPageRoute(
+      builder: (context) => child,
+      settings: this,
+    );
+  }
+}
+
 class AppRoutes {
   static const String home = '/';
   static const String login = '/login';
@@ -134,6 +148,7 @@ class AppRouter {
           return t == AccountType.enterprise ? AppRoutes.enterpriseDashboard : AppRoutes.userDashboard;
         }
 
+        if (isEnterprisePortal) return null;
         return null;
       },
       routes: [
@@ -269,37 +284,36 @@ class AppRouter {
           name: 'network',
           pageBuilder: (context, state) => const NoTransitionPage(child: NetworkPage()),
         ),
-        // THIX MARKET
+        // ==================== THIX MARKET ====================
         GoRoute(
           path: AppRoutes.thixMarket,
           name: 'thixMarket',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixMarketPage()),
         ),
-        // THIX SANTÉ
+        // ==================== THIX SANTÉ ====================
         GoRoute(
           path: AppRoutes.thixSante,
           name: 'thixSante',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixSantePage()),
         ),
-        // RÉSERVATION
-        GoRoute(
-          path: AppRoutes.reservation,
-          name: 'reservation',
-          pageBuilder: (context, state) => const NoTransitionPage(child: ThixReservationPage()),
-        ),
-        // THIX MONEY
+        // ==================== THIX MONEY ====================
         GoRoute(
           path: AppRoutes.thixMoney,
           name: 'thixMoney',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixMoneyPage()),
         ),
-        // THIX MEDIA (public)
+        // ==================== THIX MEDIA (remplace Incubateur) ====================
         GoRoute(
           path: AppRoutes.thixMedia,
           name: 'thixMedia',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixMediaPage()),
         ),
-        // EMPLOIS
+        // ==================== RÉSERVATION ====================
+        GoRoute(
+          path: AppRoutes.reservation,
+          name: 'reservation',
+          pageBuilder: (context, state) => const NoTransitionPage(child: ThixReservationPage()),
+        ),
         GoRoute(
           path: AppRoutes.jobs,
           name: 'jobs',
@@ -315,7 +329,7 @@ class AppRouter {
           name: 'recruiter',
           pageBuilder: (context, state) => const NoTransitionPage(child: RecruiterPortalPage()),
         ),
-        // OPPORTUNITÉS
+        // ==================== OPPORTUNITÉS ====================
         GoRoute(
           path: AppRoutes.opportunities,
           name: 'opportunities',
@@ -338,7 +352,7 @@ class AppRouter {
             return NoTransitionPage(child: OpportunityApplyPage(opportunityId: opportunityId));
           },
         ),
-        // ÉVÉNEMENTS
+        // ==================== ÉVÉNEMENTS ====================
         GoRoute(
           path: AppRoutes.events,
           name: 'events',
@@ -375,13 +389,13 @@ class AppRouter {
           name: 'userEventsDashboard',
           pageBuilder: (context, state) => const NoTransitionPage(child: UserEventDashboardPage()),
         ),
-        // ÉDUCATION
+        // ==================== ÉDUCATION ====================
         GoRoute(
           path: AppRoutes.education,
           name: 'education',
           pageBuilder: (context, state) => const NoTransitionPage(child: EducationPage()),
         ),
-        // FORMATIONS
+        // ==================== FORMATIONS ====================
         GoRoute(
           path: AppRoutes.trainingHome,
           name: 'trainingHome',
@@ -408,7 +422,7 @@ class AppRouter {
             return NoTransitionPage(child: LessonPlayerPage(enrollmentId: id));
           },
         ),
-        // ADMIN
+        // ==================== ADMIN ====================
         GoRoute(
           path: '${AppRoutes.admin}/:module',
           name: 'admin',
@@ -422,7 +436,7 @@ class AppRouter {
           name: 'adminRoot',
           redirect: (_, __) => '${AppRoutes.admin}/${AdminModule.overview.slug}',
         ),
-        // ADMIN MÉDIA (NOUVEAU)
+        // ==================== ADMIN MÉDIA (NOUVEAU) ====================
         GoRoute(
           path: AppRoutes.adminMedia,
           name: 'adminMedia',
@@ -430,5 +444,16 @@ class AppRouter {
         ),
       ],
     );
+  }
+}
+
+extension GoRouterBackHelpers on BuildContext {
+  void popOrGo(String fallbackLocation) {
+    final router = GoRouter.of(this);
+    if (router.canPop()) {
+      pop();
+      return;
+    }
+    go(fallbackLocation);
   }
 }
