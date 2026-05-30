@@ -45,7 +45,7 @@ import 'package:thix_id/presentation/thix_sante/thix_sante_page.dart';
 import 'package:thix_id/presentation/thix_reservation/thix_reservation_page.dart';
 import 'package:thix_id/presentation/thix_money/thix_money_page.dart';
 import 'package:thix_id/presentation/thix_incubator/incubator_page.dart';
-
+import 'package:thix_id/presentation/thix_media/thix_media_page.dart';
 class AppRouter {
   static GoRouter create(AuthController auth, {Listenable? extraRefreshListenable}) {
     final refresh = extraRefreshListenable == null ? auth : Listenable.merge([auth, extraRefreshListenable]);
@@ -384,11 +384,9 @@ class AppRouter {
           ),
         ),
         GoRoute(
-  path: '/incubator',       // ou AppRoutes.incubator
-  name: 'incubator',
-  pageBuilder: (context, state) => const NoTransitionPage(
-    child: IncubatorPage(),
-  ),
+  path: '/thix-media',
+  builder: (context, state) => const ThixMediaPage(),
+),
 ),
         GoRoute(
           path: AppRoutes.trainingHome,
@@ -468,6 +466,7 @@ class AppRoutes {
   static const String thixSante = '/sante';
   static const String reservation = '/reservation'; // AJOUT
   static String get thixMoney => '/thix-money';
+  static String get thixMedia => '/thix-media';
   static String get incubator => '/incubator';
 }
 
