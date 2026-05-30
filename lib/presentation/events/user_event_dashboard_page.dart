@@ -1,6 +1,6 @@
 // ============================================================================
 // FICHIER: lib/presentation/events/user_event_dashboard_page.dart
-// VERSION COMPLÈTE CORRIGÉE
+// VERSION CORRIGÉE (compatible avec EventService)
 // ============================================================================
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -89,6 +89,7 @@ class UserDashboardController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   String get searchQuery => _searchQuery;
 
+  // Compteurs pour les statistiques
   int get upcomingCount => _allTickets.where((t) => t.isUpcoming).length;
   int get todayCount => _allTickets.where((t) => t.isToday).length;
   int get pastCount => _allTickets.where((t) => t.isPast).length;
@@ -130,6 +131,8 @@ class UserDashboardController extends ChangeNotifier {
     final now = DateTime.now();
     final eventDate = event.eventDate;
 
+    if (event.registrationStatus == 'cancelled') return TicketStatus.cancelled;
+
     if (eventDate.isBefore(now)) {
       return TicketStatus.past;
     }
@@ -161,7 +164,7 @@ class UserDashboardController extends ChangeNotifier {
       if (_searchQuery.isNotEmpty) {
         final query = _searchQuery.toLowerCase();
         final titleMatch = ticket.event.title.toLowerCase().contains(query);
-        final venueMatch = ticket.event.venue.toLowerCase().contains(query);
+        final venueMatch = ticket.event.location.toLowerCase().contains(query);
         final codeMatch = ticket.registration.ticketCode.toLowerCase().contains(query);
         if (!titleMatch && !venueMatch && !codeMatch) return false;
       }
@@ -375,6 +378,7 @@ class _UserEventDashboardPageState extends State<UserEventDashboardPage>
   }
 
   Widget _buildLoadingState() => const Center(child: CircularProgressIndicator());
+  
   Widget _buildErrorState() => Center(child: Text(_controller.errorMessage ?? 'Erreur'));
 
   Widget _buildEmptyState() {
@@ -421,6 +425,7 @@ class _UserEventDashboardPageState extends State<UserEventDashboardPage>
           onTap: () => _navigateToTicket(ticket),
           child: Column(
             children: [
+              // Bandeau de statut
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -437,14 +442,16 @@ class _UserEventDashboardPageState extends State<UserEventDashboardPage>
                   ],
                 ),
               ),
+              // Contenu principal
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
+                    // Image de couverture (si disponible)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: (ticket.event.coverImageUrl != null && ticket.event.coverImageUrl!.isNotEmpty)
-                          ? Image.network(ticket.event.coverImageUrl!, width: 70, height: 70, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildPlaceholder())
+                      child: (ticket.event.imageUrl != null && ticket.event.imageUrl!.isNotEmpty)
+                          ? Image.network(ticket.event.imageUrl!, width: 70, height: 70, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildPlaceholder())
                           : _buildPlaceholder(),
                     ),
                     const SizedBox(width: 16),
@@ -454,21 +461,30 @@ class _UserEventDashboardPageState extends State<UserEventDashboardPage>
                         children: [
                           Text(ticket.event.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), maxLines: 2),
                           const SizedBox(height: 6),
-                          Row(children: [Icon(Icons.location_on, size: 14, color: Colors.grey[500]), const SizedBox(width: 4), Expanded(child: Text(ticket.event.venue, style: TextStyle(fontSize: 12, color: Colors.grey[600]), maxLines: 1))]),
+                          Row(children: [
+                            Icon(Icons.location_on, size: 14, color: Colors.grey[500]),
+                            const SizedBox(width: 4),
+                            Expanded(child: Text(ticket.event.location, style: TextStyle(fontSize: 12, color: Colors.grey[600]), maxLines: 1)),
+                          ]),
                           const SizedBox(height: 4),
-                          Row(children: [Icon(Icons.confirmation_number, size: 14, color: Colors.grey[500]), const SizedBox(width: 4), Text(ticket.registration.ticketCode.substring(0, 12), style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.grey[600]))]),
+                          Row(children: [
+                            Icon(Icons.confirmation_number, size: 14, color: Colors.grey[500]),
+                            const SizedBox(width: 4),
+                            Text(ticket.registration.ticketCode.substring(0, 12), style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.grey[600])),
+                          ]),
                         ],
                       ),
                     ),
-                    if (ticket.registration.quantity > 1)
+                    if (ticket.registration.tickets > 1)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                        child: Text('x${ticket.registration.quantity}', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12)),
+                        child: Text('x${ticket.registration.tickets}', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                   ],
                 ),
               ),
+              // Boutons d'action
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey[200]!))),
