@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/media_content.dart';
 
@@ -73,7 +74,6 @@ class MediaService {
 
   // ==================== MÉTHODES D'ADMINISTRATION ====================
 
-  /// Récupère tous les médias (publiés et non publiés) pour l'admin
   Future<List<MediaContent>> fetchAllMedia() async {
     final response = await _supabase
         .from('media_contents')
@@ -85,19 +85,83 @@ class MediaService {
     return [];
   }
 
-  /// Insère un nouveau média (sans gestion d'upload de fichiers)
+  // Insertion simple (sans fichiers locaux)
   Future<void> insert(MediaContent item) async {
     await _supabase.from('media_contents').insert(item.toJson());
   }
 
-  /// Met à jour un média existant
+  // Mise à jour simple
   Future<void> update(MediaContent item) async {
     await _supabase.from('media_contents').update(item.toJson()).eq('id', item.id);
   }
 
-  /// Supprime un média (option : supprime aussi les fichiers associés dans Storage)
+  // Insertion avec upload de fichiers (image + vidéo)
+  Future<void> insertWithFiles(MediaContent item, {File? coverFile, File? videoFile}) async {
+    String? coverUrl = item.coverUrl;
+    String? videoUrl = item.videoUrl;
+
+    if (coverFile != null) {
+      final coverExt = coverFile.path.split('.').last;
+      final coverName = 'covers/${DateTime.now().millisecondsSinceEpoch}.$coverExt';
+      await _uploadFile('media_covers', coverFile, coverName);
+      coverUrl = _supabase.storage.from('media_covers').getPublicUrl(coverName);
+    }
+    if (videoFile != null) {
+      final videoExt = videoFile.path.split('.').last;
+      final videoName = 'videos/${DateTime.now().millisecondsSinceEpoch}.$videoExt';
+      await _uploadFile('media_videos', videoFile, videoName);
+      videoUrl = _supabase.storage.from('media_videos').getPublicUrl(videoName);
+    }
+
+    final newItem = item.copyWith(
+      coverUrl: coverUrl!,
+      videoUrl: videoUrl!,
+    );
+    await insert(newItem);
+  }
+
+  // Mise à jour avec possibilité de remplacer l'image ou la vidéo
+  Future<void> updateWithFiles(MediaContent item, {File? newCoverFile, File? newVideoFile}) async {
+    String? coverUrl = item.coverUrl;
+    String? videoUrl = item.videoUrl;
+
+    if (newCoverFile != null) {
+      // Supprimer l'ancienne image si elle est dans Supabase Storage
+      if (item.coverUrl.contains('supabase.co')) {
+        final oldPath = _extractStoragePath(item.coverUrl);
+        if (oldPath != null) {
+          await _supabase.storage.from('media_covers').remove([oldPath]);
+        }
+      }
+      final coverExt = newCoverFile.path.split('.').last;
+      final coverName = 'covers/${DateTime.now().millisecondsSinceEpoch}.$coverExt';
+      await _uploadFile('media_covers', newCoverFile, coverName);
+      coverUrl = _supabase.storage.from('media_covers').getPublicUrl(coverName);
+    }
+
+    if (newVideoFile != null) {
+      if (item.videoUrl.contains('supabase.co')) {
+        final oldPath = _extractStoragePath(item.videoUrl);
+        if (oldPath != null) {
+          await _supabase.storage.from('media_videos').remove([oldPath]);
+        }
+      }
+      final videoExt = newVideoFile.path.split('.').last;
+      final videoName = 'videos/${DateTime.now().millisecondsSinceEpoch}.$videoExt';
+      await _uploadFile('media_videos', newVideoFile, videoName);
+      videoUrl = _supabase.storage.from('media_videos').getPublicUrl(videoName);
+    }
+
+    final updatedItem = item.copyWith(
+      coverUrl: coverUrl!,
+      videoUrl: videoUrl!,
+      updatedAt: DateTime.now(),
+    );
+    await update(updatedItem);
+  }
+
+  // Suppression complète (base + fichiers Storage)
   Future<void> deleteMedia(MediaContent item) async {
-    // 1. Supprimer les fichiers dans Storage (si les URL pointent vers Supabase)
     try {
       if (item.coverUrl.contains('supabase.co')) {
         final coverPath = _extractStoragePath(item.coverUrl);
@@ -112,24 +176,24 @@ class MediaService {
         }
       }
     } catch (e) {
-      // Ignorer les erreurs de suppression de fichiers
       print('Erreur suppression fichiers: $e');
     }
-    // 2. Supprimer l'entrée dans la base
     await _supabase.from('media_contents').delete().eq('id', item.id);
   }
 
-  // ==================== OUTILS PRIVÉS ====================
+  // ==================== MÉTHODES PRIVÉES ====================
 
-  /// Extrait le chemin d'un fichier à partir de son URL publique Supabase
+  Future<void> _uploadFile(String bucket, File file, String path) async {
+    final bytes = await file.readAsBytes();
+    await _supabase.storage.from(bucket).uploadBinary(path, bytes);
+  }
+
   String? _extractStoragePath(String url) {
     final uri = Uri.tryParse(url);
     if (uri == null) return null;
     final segments = uri.pathSegments;
-    // Exemple : /storage/v1/object/public/media_covers/covers/123.jpg
     final publicIndex = segments.indexOf('public');
     if (publicIndex != -1 && publicIndex + 2 < segments.length) {
-      // On ignore 'public' et le nom du bucket
       return segments.sublist(publicIndex + 2).join('/');
     }
     return null;
