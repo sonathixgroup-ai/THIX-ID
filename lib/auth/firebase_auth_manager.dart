@@ -383,44 +383,30 @@ class FirebaseAuthManager implements AuthManager {
   }
 
   Future<String> _generateUniqueThixId({required String uid}) async {
-    final cc = ThixIdService.inferCountryCode();
-    for (var i = 0; i < 24; i++) {
-      final candidate = ThixIdService.generate(countryCode: cc);
-      final index = _db.collection('thix_ids').doc(candidate);
-      try {
-        await _db.runTransaction((tx) async {
-          final snap = await tx.get(index);
-          if (snap.exists) throw Exception('duplicate');
-          tx.set(
-            index,
-            {
-              'uid': uid,
-              'thixId': candidate,
-              'createdAt': FieldValue.serverTimestamp(),
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
-        });
-        return candidate;
-      } catch (_) {
-        continue;
-      }
-    }
-    return ThixIdService.generate(countryCode: cc);
-  }
-
-  @override
-  Future<void> updateCurrentUser(AppUser user) async {
-    final current = currentUser;
-    if (current == null) throw AuthException('Session expirée.');
-    if (current.id != user.id) throw AuthException('Utilisateur courant différent.');
-
+  // Supprimez la ligne suivante si inutile
+  // final cc = ThixIdService.inferCountryCode();
+  for (var i = 0; i < 24; i++) {
+    final candidate = ThixIdService.generate(); // ← suppression de countryCode
+    final index = _db.collection('thix_ids').doc(candidate);
     try {
-      await _db.collection('users').doc(user.id).set(user.toFirestore(), SetOptions(merge: true));
-    } catch (e) {
-      debugPrint('FirebaseAuthManager: updateCurrentUser failed uid=${user.id} err=$e');
+      await _db.runTransaction((tx) async {
+        final snap = await tx.get(index);
+        if (snap.exists) throw Exception('duplicate');
+        tx.set(
+          index,
+          {
+            'uid': uid,
+            'thixId': candidate,
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      });
+      return candidate;
+    } catch (_) {
+      continue;
     }
-    _currentUser.value = user;
   }
+  return ThixIdService.generate(); // ← suppression également ici
 }
