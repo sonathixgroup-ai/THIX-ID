@@ -1,6 +1,6 @@
 // ============================================================================
 // FICHIER: lib/presentation/events/user_event_dashboard_page.dart
-// VERSION CORRIGÉE (compatible avec EventService)
+// VERSION CORRIGÉE (compatible avec vos modèles)
 // ============================================================================
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -89,7 +89,6 @@ class UserDashboardController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   String get searchQuery => _searchQuery;
 
-  // Compteurs pour les statistiques
   int get upcomingCount => _allTickets.where((t) => t.isUpcoming).length;
   int get todayCount => _allTickets.where((t) => t.isToday).length;
   int get pastCount => _allTickets.where((t) => t.isPast).length;
@@ -110,12 +109,12 @@ class UserDashboardController extends ChangeNotifier {
           tickets.add(UserTicketWithEvent(
             registration: registration,
             event: event,
-            status: _determineTicketStatus(event),
+            status: _determineTicketStatus(event, registration),
           ));
         }
       }
 
-      tickets.sort((a, b) => a.event.eventDate.compareTo(b.event.eventDate));
+      tickets.sort((a, b) => a.event.startsAt.compareTo(b.event.startsAt)); // ✅ startsAt
       _allTickets = tickets;
       _applyFilters();
       _isLoading = false;
@@ -127,11 +126,12 @@ class UserDashboardController extends ChangeNotifier {
     }
   }
 
-  TicketStatus _determineTicketStatus(EventItem event) {
+  TicketStatus _determineTicketStatus(EventItem event, EventRegistration registration) {
     final now = DateTime.now();
-    final eventDate = event.eventDate;
+    final eventDate = event.startsAt; // ✅ startsAt
 
-    if (event.registrationStatus == 'cancelled') return TicketStatus.cancelled;
+    // Vérifier si la réservation est annulée (selon le statut)
+    if (registration.status == 'cancelled') return TicketStatus.cancelled;
 
     if (eventDate.isBefore(now)) {
       return TicketStatus.past;
@@ -411,7 +411,19 @@ class _UserEventDashboardPageState extends State<UserEventDashboardPage>
     );
   }
 
+  // Fonction utilitaire pour obtenir l'URL de couverture (image)
+  String? _getCoverUrl(EventItem event) {
+    // Priorité à coverImageUrl si disponible (construit à partir de bucket + path)
+    if (event.coverImageBucket != null && event.coverImagePath != null) {
+      // Construction de l'URL publique Supabase – adaptez selon votre bucket
+      return 'https://your_supabase_url/storage/v1/object/public/${event.coverImageBucket}/${event.coverImagePath}';
+    }
+    // Sinon utiliser imageAssetPath
+    return event.imageAssetPath;
+  }
+
   Widget _buildTicketCard(UserTicketWithEvent ticket) {
+    final coverUrl = _getCoverUrl(ticket.event);
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -438,7 +450,7 @@ class _UserEventDashboardPageState extends State<UserEventDashboardPage>
                     const SizedBox(width: 8),
                     Text(ticket.status.label, style: TextStyle(color: ticket.status.color, fontSize: 12, fontWeight: FontWeight.w600)),
                     const Spacer(),
-                    Text(DateFormat('dd MMM yyyy').format(ticket.event.eventDate), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    Text(DateFormat('dd MMM yyyy').format(ticket.event.startsAt), style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   ],
                 ),
               ),
@@ -447,11 +459,10 @@ class _UserEventDashboardPageState extends State<UserEventDashboardPage>
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    // Image de couverture (si disponible)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: (ticket.event.imageUrl != null && ticket.event.imageUrl!.isNotEmpty)
-                          ? Image.network(ticket.event.imageUrl!, width: 70, height: 70, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildPlaceholder())
+                      child: coverUrl != null && coverUrl.isNotEmpty
+                          ? Image.network(coverUrl, width: 70, height: 70, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildPlaceholder())
                           : _buildPlaceholder(),
                     ),
                     const SizedBox(width: 16),
@@ -475,7 +486,7 @@ class _UserEventDashboardPageState extends State<UserEventDashboardPage>
                         ],
                       ),
                     ),
-                    if (ticket.registration.tickets > 1)
+                    if (ticket.registration.tickets > 1) // ✅ utilise tickets
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
