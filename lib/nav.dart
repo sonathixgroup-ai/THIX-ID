@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:thix_id/auth/auth_controller.dart';
 import 'package:thix_id/models/app_user.dart';
 
-// Import all screens
+// Imports des écrans (tous vos écrans existants)
 import 'presentation/home/home_page.dart';
 import 'presentation/auth/login_page.dart';
 import 'presentation/auth/personal_registration_page.dart';
@@ -47,7 +48,7 @@ import 'package:thix_id/presentation/thix_money/thix_money_page.dart';
 import 'package:thix_id/presentation/thix_media/thix_media_page.dart';
 import 'package:thix_id/presentation/admin/pages/admin_media_page.dart';
 
-/// Page sans transition (utilisée par GoRouter)
+/// Page sans transition (indispensable pour GoRouter)
 class NoTransitionPage<T> extends Page<T> {
   final Widget child;
   const NoTransitionPage({required this.child, super.key});
@@ -98,7 +99,7 @@ class AppRoutes {
 
 class AppRouter {
   static GoRouter create(AuthController auth, {Listenable? extraRefreshListenable}) {
-    final refresh = extraRefreshListenable == null ? auth : Listenable.merge([auth, extraRefreshListenable]);
+    final refresh = extraRefreshListenable ?? auth;
     return GoRouter(
       initialLocation: AppRoutes.home,
       refreshListenable: refresh,
@@ -284,37 +285,37 @@ class AppRouter {
           name: 'network',
           pageBuilder: (context, state) => const NoTransitionPage(child: NetworkPage()),
         ),
-        // ==================== THIX MARKET ====================
+        // THIX MARKET
         GoRoute(
           path: AppRoutes.thixMarket,
           name: 'thixMarket',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixMarketPage()),
         ),
-        // ==================== THIX SANTÉ ====================
+        // THIX SANTÉ
         GoRoute(
           path: AppRoutes.thixSante,
           name: 'thixSante',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixSantePage()),
         ),
-        // ==================== THIX MONEY ====================
+        // THIX MONEY
         GoRoute(
           path: AppRoutes.thixMoney,
           name: 'thixMoney',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixMoneyPage()),
         ),
-        // ==================== THIX MEDIA ====================
+        // THIX MEDIA
         GoRoute(
           path: AppRoutes.thixMedia,
           name: 'thixMedia',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixMediaPage()),
         ),
-        // ==================== RÉSERVATION ====================
+        // RÉSERVATION
         GoRoute(
           path: AppRoutes.reservation,
           name: 'reservation',
           pageBuilder: (context, state) => const NoTransitionPage(child: ThixReservationPage()),
         ),
-        // ==================== JOBS ====================
+        // JOBS
         GoRoute(
           path: AppRoutes.jobs,
           name: 'jobs',
@@ -330,7 +331,7 @@ class AppRouter {
           name: 'recruiter',
           pageBuilder: (context, state) => const NoTransitionPage(child: RecruiterPortalPage()),
         ),
-        // ==================== OPPORTUNITÉS ====================
+        // OPPORTUNITÉS
         GoRoute(
           path: AppRoutes.opportunities,
           name: 'opportunities',
@@ -353,7 +354,7 @@ class AppRouter {
             return NoTransitionPage(child: OpportunityApplyPage(opportunityId: opportunityId));
           },
         ),
-        // ==================== JOBS DETAILS ====================
+        // JOBS DETAILS
         GoRoute(
           path: '/jobs/:jobId',
           name: 'jobDetails',
@@ -371,7 +372,7 @@ class AppRouter {
             return NoTransitionPage(child: JobApplyPage(jobId: jobId));
           },
         ),
-        // ==================== ÉVÉNEMENTS ====================
+        // ÉVÉNEMENTS
         GoRoute(
           path: AppRoutes.events,
           name: 'events',
@@ -408,13 +409,13 @@ class AppRouter {
           name: 'userEventsDashboard',
           pageBuilder: (context, state) => const NoTransitionPage(child: UserEventDashboardPage()),
         ),
-        // ==================== ÉDUCATION ====================
+        // ÉDUCATION
         GoRoute(
           path: AppRoutes.education,
           name: 'education',
           pageBuilder: (context, state) => const NoTransitionPage(child: EducationPage()),
         ),
-        // ==================== FORMATIONS ====================
+        // FORMATIONS
         GoRoute(
           path: AppRoutes.trainingHome,
           name: 'trainingHome',
@@ -441,7 +442,7 @@ class AppRouter {
             return NoTransitionPage(child: LessonPlayerPage(enrollmentId: id));
           },
         ),
-        // ==================== ADMIN ====================
+        // ADMIN GÉNÉRAL
         GoRoute(
           path: '${AppRoutes.admin}/:module',
           name: 'admin',
@@ -455,7 +456,7 @@ class AppRouter {
           name: 'adminRoot',
           redirect: (_, __) => '${AppRoutes.admin}/${AdminModule.overview.slug}',
         ),
-        // ==================== ADMIN MÉDIA ====================
+        // ADMIN MÉDIA
         GoRoute(
           path: AppRoutes.adminMedia,
           name: 'adminMedia',
