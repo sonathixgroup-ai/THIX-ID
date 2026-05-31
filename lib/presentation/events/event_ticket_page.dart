@@ -122,7 +122,6 @@ class _EventTicketPageState extends State<EventTicketPage> {
       final event = await _eventService.getEventById(widget.eventId);
       final reg = await _eventService.getRegistrationById(widget.registrationId);
       if (event == null || reg == null) return null;
-      // Vérification que la réservation correspond bien à l'événement
       if (reg.eventId != event.id) return null;
       return _TicketBundle(event: event, reg: reg);
     } catch (e) {
@@ -161,6 +160,10 @@ class _TicketCard extends StatelessWidget {
   final EventRegistration reg;
   const _TicketCard({required this.event, required this.reg});
 
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -187,7 +190,7 @@ class _TicketCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text('${_formatDate(event.eventDate)} • ${event.location}',
+          Text('${_formatDate(event.startsAt)} • ${event.location}', // ✅ startsAt
               style: context.textStyles.bodyMedium?.copyWith(
                   color: LightModeColors.secondaryText, height: 1.5)),
           const SizedBox(height: AppSpacing.lg),
@@ -268,10 +271,6 @@ class _TicketCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
   }
 }
 
