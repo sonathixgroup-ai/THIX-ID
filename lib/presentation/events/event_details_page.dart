@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // ← ajout
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:thix_id/nav.dart';
 import 'package:thix_id/services/event_service.dart';
 import 'package:thix_id/theme.dart';
@@ -20,7 +20,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   @override
   void initState() {
     super.initState();
-    _service = EventService(Supabase.instance.client); // ← correction ligne 17
+    _service = EventService(Supabase.instance.client);
   }
 
   @override
@@ -168,13 +168,13 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     children: [
                       _InfoPill(
                           icon: Icons.event_available_rounded,
-                          label: event.dateLabel),
+                          label: event.dateLabel), // OK
                       _InfoPill(
                           icon: Icons.location_on_rounded,
                           label: event.location),
                       _InfoPill(
                           icon: Icons.payments_rounded,
-                          label: event.price?.toString() ?? 'Gratuit'), // ← correction ligne 169
+                          label: event.priceLabel), // Utilise priceLabel
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -265,9 +265,9 @@ class _TopBar extends StatelessWidget {
 }
 
 class _InfoPill extends StatelessWidget {
-  final IconData icon;   // ← nommé
-  final String label;    // ← nommé
-  const _InfoPill({required this.icon, required this.label}); // ← constructeur correct
+  final IconData icon;
+  final String label;
+  const _InfoPill({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
