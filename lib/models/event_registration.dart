@@ -1,18 +1,18 @@
-import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Modèle représentant une inscription à un événement.
 class EventRegistration {
   final String id;
   final String eventId;
   final String? userId;
   final String attendeeThixId;
-  final int tickets;
+  final int tickets; // Utilisé pour la quantité
   final String ticketCode;
   final String status;
   final DateTime? checkedInAt;
   final String? note;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final num? price; // Ajouté pour calculer le prix total
 
   const EventRegistration({
     required this.id,
@@ -26,21 +26,22 @@ class EventRegistration {
     this.note,
     required this.createdAt,
     required this.updatedAt,
+    this.price,
   });
 
   // ==========================================================================
-  // GETTERS DE COMPATIBILITÉ (pour éviter les erreurs UI)
+  // GETTERS DE COMPATIBILITÉ (Corrige les erreurs de votre UI)
   // ==========================================================================
-
+  
   int get quantity => tickets;
-  String get attendeeName => attendeeThixId;
-  String get currency => 'USD';
   String get thixCode => ticketCode;
-  bool get isCheckedIn => status == 'checked_in';
-  bool get isCancelled => status == 'cancelled';
+  String get attendeeName => attendeeThixId;
+  
+  // Calcul du prix total si le prix est connu
+  num get totalPrice => tickets * (price ?? 0);
 
   // ==========================================================================
-  // FABRIQUE (JSON -> Objet)
+  // FABRIQUE
   // ==========================================================================
 
   factory EventRegistration.fromJson(Map<String, dynamic> json) {
@@ -58,24 +59,7 @@ class EventRegistration {
       note: json['note']?.toString(),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? '') ?? DateTime.now(),
+      price: json['price'] as num?,
     );
   }
-
-  // ==========================================================================
-  // SÉRIALISATION (Objet -> JSON)
-  // ==========================================================================
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'event_id': eventId,
-    'user_id': userId,
-    'attendee_thix_id': attendeeThixId,
-    'tickets': tickets,
-    'ticket_code': ticketCode,
-    'status': status,
-    'checked_in_at': checkedInAt?.toIso8601String(),
-    'note': note,
-    'created_at': createdAt.toIso8601String(),
-    'updated_at': updatedAt.toIso8601String(),
-  };
 }
