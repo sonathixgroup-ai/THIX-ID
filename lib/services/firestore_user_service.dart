@@ -132,7 +132,7 @@ class FirestoreUserService {
   }
 
   // ==========================================================================
-  // MÉTHODES POUR LE DASHBOARD (sans erreurs)
+  // MÉTHODES POUR LE DASHBOARD
   // ==========================================================================
 
   Future<void> addPaymentTransaction({
@@ -166,7 +166,7 @@ class FirestoreUserService {
   }
 
   // ==========================================================================
-  // MISE À JOUR
+  // MISE À JOUR SIMPLIFIÉE
   // ==========================================================================
 
   Future<void> updateProfile({
@@ -182,6 +182,118 @@ class FirestoreUserService {
     if (thixChat != null) patch['thix_chat'] = thixChat;
     await _client.from(_table).update(patch).eq('id', sessionUid);
   }
+
+  // ==========================================================================
+  // MISE À JOUR COMPLÈTE (pour le dashboard)
+  // ==========================================================================
+
+  Future<void> updateProfileFull({
+    required String uid,
+    String? fullName,
+    String? competence,
+    String? bio,
+    String? countryOrOrigin,
+    String? contactPhone,
+    String? maritalStatus,
+    String? gender,
+    String? occupation,
+    String? profession,
+    String? dateOfBirth,
+    String? placeOfBirth,
+    String? nationality,
+    String? address,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    String? emergencyContactRelation,
+    String? originProvince,
+    String? originTerritory,
+    String? originSector,
+    String? residenceCountry,
+    String? residenceProvince,
+    String? residenceTerritory,
+    String? residenceCity,
+    String? residenceCommune,
+    String? residenceQuarter,
+    String? bloodGroup,
+    bool? hasPhysicalDisability,
+    String? physicalDisabilityDescription,
+    String? nationalityNumber,
+    String? idDocumentType,
+    String? idDocumentIssueDate,
+    String? idDocumentExpiryDate,
+    String? idDocumentIssuePlace,
+    String? idDocumentFrontDocId,
+    String? idDocumentBackDocId,
+    String? idDocumentSelfieDocId,
+    String? idVerificationStatus,
+    List<String>? languages,
+    List<Map<String, dynamic>>? languagesDetailed,
+    String? photoUrl,
+    bool? biometricsEnabled,
+    bool? twoFaEnabled,
+  }) async {
+    final sessionUid = _requireAuthedUid();
+    final patch = <String, dynamic>{
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    
+    // N'ajouter que les champs non nuls
+    if (fullName != null) patch['full_name'] = fullName;
+    if (competence != null) patch['competence'] = competence;
+    if (bio != null) patch['bio'] = bio;
+    if (countryOrOrigin != null) patch['country_or_origin'] = countryOrOrigin;
+    if (contactPhone != null) patch['contact_phone'] = contactPhone;
+    if (maritalStatus != null) patch['marital_status'] = maritalStatus;
+    if (gender != null) patch['gender'] = gender;
+    if (occupation != null) patch['occupation'] = occupation;
+    if (profession != null) patch['profession'] = profession;
+    if (dateOfBirth != null) patch['date_of_birth'] = dateOfBirth;
+    if (placeOfBirth != null) patch['place_of_birth'] = placeOfBirth;
+    if (nationality != null) patch['nationality'] = nationality;
+    if (address != null) patch['address'] = address;
+    if (emergencyContactName != null) patch['emergency_contact_name'] = emergencyContactName;
+    if (emergencyContactPhone != null) patch['emergency_contact_phone'] = emergencyContactPhone;
+    if (emergencyContactRelation != null) patch['emergency_contact_relation'] = emergencyContactRelation;
+    if (originProvince != null) patch['origin_province'] = originProvince;
+    if (originTerritory != null) patch['origin_territory'] = originTerritory;
+    if (originSector != null) patch['origin_sector'] = originSector;
+    if (residenceCountry != null) patch['residence_country'] = residenceCountry;
+    if (residenceProvince != null) patch['residence_province'] = residenceProvince;
+    if (residenceTerritory != null) patch['residence_territory'] = residenceTerritory;
+    if (residenceCity != null) patch['residence_city'] = residenceCity;
+    if (residenceCommune != null) patch['residence_commune'] = residenceCommune;
+    if (residenceQuarter != null) patch['residence_quarter'] = residenceQuarter;
+    if (bloodGroup != null) patch['blood_group'] = bloodGroup;
+    if (hasPhysicalDisability != null) patch['has_physical_disability'] = hasPhysicalDisability;
+    if (physicalDisabilityDescription != null) patch['physical_disability_description'] = physicalDisabilityDescription;
+    if (nationalityNumber != null) patch['nationality_number'] = nationalityNumber;
+    if (idDocumentType != null) patch['id_document_type'] = idDocumentType;
+    if (idDocumentIssueDate != null) patch['id_document_issue_date'] = idDocumentIssueDate;
+    if (idDocumentExpiryDate != null) patch['id_document_expiry_date'] = idDocumentExpiryDate;
+    if (idDocumentIssuePlace != null) patch['id_document_issue_place'] = idDocumentIssuePlace;
+    if (idDocumentFrontDocId != null) patch['id_document_front_doc_id'] = idDocumentFrontDocId;
+    if (idDocumentBackDocId != null) patch['id_document_back_doc_id'] = idDocumentBackDocId;
+    if (idDocumentSelfieDocId != null) patch['id_document_selfie_doc_id'] = idDocumentSelfieDocId;
+    if (idVerificationStatus != null) patch['id_verification_status'] = idVerificationStatus;
+    if (languages != null) patch['languages'] = languages;
+    if (languagesDetailed != null) patch['languages_detailed'] = languagesDetailed;
+    if (photoUrl != null) patch['avatar_url'] = photoUrl;
+    if (biometricsEnabled != null) patch['biometrics_enabled'] = biometricsEnabled;
+    if (twoFaEnabled != null) patch['two_fa_enabled'] = twoFaEnabled;
+
+    try {
+      if (patch.length > 1) { // plus que 'updated_at'
+        await _client.from(_table).update(patch).eq('id', sessionUid);
+      }
+    } catch (e) {
+      debugPrint('FirestoreUserService: updateProfileFull failed uid=$uid err=$e');
+      // Ne pas relancer l'erreur pour ne pas casser l'UI
+    }
+  }
+
+  // ==========================================================================
+  // THIX ID
+  // ==========================================================================
 
   Future<String> ensureThixId({required String uid}) async {
     final sessionUid = _requireAuthedUid();
