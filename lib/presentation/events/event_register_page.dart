@@ -18,31 +18,18 @@ class EventRegisterPage extends StatefulWidget {
   });
 
   @override
-  State<EventRegisterPage> createState() =>
-      _EventRegisterPageState();
+  State<EventRegisterPage> createState() => _EventRegisterPageState();
 }
 
-class _EventRegisterPageState
-    extends State<EventRegisterPage> {
+class _EventRegisterPageState extends State<EventRegisterPage> {
   final _formKey = GlobalKey<FormState>();
-
-  final _thixIdController =
-      TextEditingController();
-
-  final _nameController =
-      TextEditingController();
-
-  final _emailController =
-      TextEditingController();
-
-  final _phoneController =
-      TextEditingController();
-
-  final _noteController =
-      TextEditingController();
+  final _thixIdController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _noteController = TextEditingController();
 
   bool _loading = false;
-
   int _tickets = 1;
 
   late EventService _eventService;
@@ -50,10 +37,7 @@ class _EventRegisterPageState
   @override
   void initState() {
     super.initState();
-
-    _eventService = EventService(
-      Supabase.instance.client,
-    );
+    _eventService = EventService(Supabase.instance.client);
   }
 
   @override
@@ -67,7 +51,8 @@ class _EventRegisterPageState
   }
 
   double get _totalPrice {
-    return widget.event.price * _tickets;
+    final price = widget.event.price ?? 0;
+    return price * _tickets;
   }
 
   Future<void> _register() async {
@@ -75,14 +60,12 @@ class _EventRegisterPageState
       return;
     }
 
-    final user =
-        Supabase.instance.client.auth.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
 
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('Veuillez vous connecter'),
+          content: Text('Veuillez vous connecter'),
         ),
       );
       return;
@@ -93,37 +76,32 @@ class _EventRegisterPageState
     });
 
     try {
-      final success =
-          await _eventService.registerForEvent(
+      final success = await _eventService.registerForEvent(
         userId: user.id,
         eventId: widget.event.id,
       );
 
       if (!success) {
-        throw Exception(
-          'Vous êtes déjà inscrit.',
-        );
+        throw Exception('Vous êtes déjà inscrit ou une erreur est survenue.');
       }
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Réservation effectuée avec succès',
-          ),
+          content: Text('Réservation effectuée avec succès'),
+          backgroundColor: Colors.green,
         ),
       );
 
-      context.go('/events');
+      // Redirection vers le dashboard des billets
+      context.go(AppRoutes.userEventsDashboard);
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            e.toString(),
-          ),
+          content: Text(e.toString()),
           backgroundColor: Colors.red,
         ),
       );
@@ -142,190 +120,144 @@ class _EventRegisterPageState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Réservation',
-        ),
+        title: const Text('Réservation'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Informations de l'événement
                 Container(
-                  padding:
-                      const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color:
-                        Colors.blue.shade50,
-                    borderRadius:
-                        BorderRadius.circular(
-                            16),
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         event.title,
-                        style:
-                            const TextStyle(
+                        style: const TextStyle(
                           fontSize: 20,
-                          fontWeight:
-                              FontWeight.bold,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(
-                          height: 8),
-                      Text(
-                        event.location,
-                      ),
-                      const SizedBox(
-                          height: 4),
+                      const SizedBox(height: 8),
+                      Text(event.location),
+                      const SizedBox(height: 4),
                       Text(
                         event.priceLabel,
-                        style:
-                            const TextStyle(
+                        style: const TextStyle(
                           color: Colors.blue,
-                          fontWeight:
-                              FontWeight.bold,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(
-                    height: 24),
+                const SizedBox(height: 24),
 
+                // THIX ID
                 const Text(
-                  'THIX ID',
-                  style: TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
-                  ),
+                  'THIX ID *',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-
-                const SizedBox(
-                    height: 8),
-
+                const SizedBox(height: 8),
                 TextFormField(
-                  controller:
-                      _thixIdController,
-                  decoration:
-                      const InputDecoration(
-                    border:
-                        OutlineInputBorder(),
-                    hintText:
-                        'Votre THIX ID',
+                  controller: _thixIdController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Votre THIX ID',
                   ),
                   validator: (value) {
-                    if (value == null ||
-                        value.isEmpty) {
+                    if (value == null || value.isEmpty) {
                       return 'Champ obligatoire';
                     }
                     return null;
                   },
                 ),
 
-                const SizedBox(
-                    height: 16),
+                const SizedBox(height: 16),
 
+                // Nom complet
+                const Text(
+                  'Nom complet *',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
                 TextFormField(
-                  controller:
-                      _nameController,
-                  decoration:
-                      const InputDecoration(
-                    border:
-                        OutlineInputBorder(),
-                    labelText:
-                        'Nom complet',
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Votre nom complet',
                   ),
                   validator: (value) {
-                    if (value == null ||
-                        value.isEmpty) {
+                    if (value == null || value.isEmpty) {
                       return 'Champ obligatoire';
                     }
                     return null;
                   },
                 ),
 
-                const SizedBox(
-                    height: 16),
+                const SizedBox(height: 16),
 
+                // Email
+                const Text('Email'),
+                const SizedBox(height: 8),
                 TextFormField(
-                  controller:
-                      _emailController,
-                  keyboardType:
-                      TextInputType
-                          .emailAddress,
-                  decoration:
-                      const InputDecoration(
-                    border:
-                        OutlineInputBorder(),
-                    labelText:
-                        'Email',
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'votre@email.com',
                   ),
                 ),
 
-                const SizedBox(
-                    height: 16),
+                const SizedBox(height: 16),
 
+                // Téléphone
+                const Text('Téléphone'),
+                const SizedBox(height: 8),
                 TextFormField(
-                  controller:
-                      _phoneController,
-                  keyboardType:
-                      TextInputType.phone,
-                  decoration:
-                      const InputDecoration(
-                    border:
-                        OutlineInputBorder(),
-                    labelText:
-                        'Téléphone',
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: '+243 XX XXX XXXX',
                   ),
                 ),
 
-                const SizedBox(
-                    height: 24),
+                const SizedBox(height: 24),
 
+                // Nombre de billets
                 const Text(
                   'Nombre de billets',
-                  style: TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-
-                const SizedBox(
-                    height: 8),
-
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     IconButton(
                       onPressed: () {
-                        if (_tickets >
-                            1) {
+                        if (_tickets > 1) {
                           setState(() {
                             _tickets--;
                           });
                         }
                       },
-                      icon: const Icon(
-                        Icons.remove_circle,
-                      ),
+                      icon: const Icon(Icons.remove_circle),
                     ),
                     Text(
-                      _tickets
-                          .toString(),
-                      style:
-                          const TextStyle(
+                      _tickets.toString(),
+                      style: const TextStyle(
                         fontSize: 20,
-                        fontWeight:
-                            FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     IconButton(
@@ -334,90 +266,69 @@ class _EventRegisterPageState
                           _tickets++;
                         });
                       },
-                      icon: const Icon(
-                        Icons.add_circle,
-                      ),
+                      icon: const Icon(Icons.add_circle),
                     ),
                   ],
                 ),
 
-                const SizedBox(
-                    height: 24),
+                const SizedBox(height: 24),
 
+                // Note
                 TextFormField(
-                  controller:
-                      _noteController,
+                  controller: _noteController,
                   maxLines: 3,
-                  decoration:
-                      const InputDecoration(
-                    border:
-                        OutlineInputBorder(),
-                    labelText:
-                        'Note (optionnelle)',
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Note (optionnelle)',
+                    hintText: 'Allergies, besoins spécifiques...',
                   ),
                 ),
 
-                const SizedBox(
-                    height: 24),
+                const SizedBox(height: 24),
 
+                // Montant total
                 Container(
-                  padding:
-                      const EdgeInsets.all(
-                          16),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    border: Border.all(
-                      color:
-                          Colors.grey.shade300,
-                    ),
-                    borderRadius:
-                        BorderRadius.circular(
-                            12),
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment
-                            .spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
                         'Montant total',
-                        style:
-                            TextStyle(
-                          fontWeight:
-                              FontWeight.bold,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
                         '${_totalPrice.toStringAsFixed(2)} USD',
-                        style:
-                            const TextStyle(
+                        style: const TextStyle(
                           fontSize: 18,
-                          fontWeight:
-                              FontWeight.bold,
-                          color:
-                              Colors.blue,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(
-                    height: 32),
+                const SizedBox(height: 32),
 
+                // Bouton de réservation
                 SizedBox(
-                  width:
-                      double.infinity,
+                  width: double.infinity,
                   height: 55,
-                  child:
-                      ElevatedButton(
-                    onPressed:
-                        _loading
-                            ? null
-                            : _register,
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _register,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                    ),
                     child: _loading
                         ? const CircularProgressIndicator()
                         : const Text(
                             'Confirmer la réservation',
+                            style: TextStyle(fontSize: 16),
                           ),
                   ),
                 ),
