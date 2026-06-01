@@ -29,6 +29,7 @@ class ThixCallSheet extends StatefulWidget {
 }
 
 class _ThixCallSheetState extends State<ThixCallSheet> {
+  late RtcEngine _engine;
   int? _remoteUid;
   bool _isJoined = false;
   bool _micOn = true;
@@ -51,8 +52,17 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
   @override
   void dispose() {
     _connectionTimeout?.cancel();
-    _leaveChannel();
+    _disposeEngine();
     super.dispose();
+  }
+
+  Future<void> _disposeEngine() async {
+    try {
+      await _engine.leaveChannel();
+      _engine.release();
+    } catch (e) {
+      debugPrint('disposeEngine error: $e');
+    }
   }
 
   Future<void> _init() async {
@@ -102,53 +112,52 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
   Future<void> _initAgora() async {
     final channelName = 'call_${widget.callId}';
     
-    // Initialiser Agora
-    await AgoraRtcEngine.init(
-      engineConfig: RtcEngineConfig(
-        appId: '96ed392d17c74fe684bbb9d4a031ad12',
-        channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
-      ),
-    );
+    // Initialisation avec la nouvelle API
+    _engine = createAgoraRtcEngine();
+    await _engine.initialize(const RtcEngineContext(
+      appId: '96ed392d17c74fe684bbb9d4a031ad12',
+      channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
+    ));
 
     // Définir les callbacks
-    AgoraRtcEngine.onJoinChannelSuccess = (connection, elapsed) {
-      debugPrint('JoinChannel success');
-      setState(() {
-        _isJoined = true;
-        _connected = true;
-        _startedAt ??= DateTime.now();
-      });
-      _connectionTimeout?.cancel();
-    };
+    _engine.registerEventHandler(RtcEngineEventHandler(
+      onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
+        debugPrint('JoinChannel success');
+        setState(() {
+          _isJoined = true;
+          _connected = true;
+          _startedAt ??= DateTime.now();
+        });
+        _connectionTimeout?.cancel();
+      },
+      onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+        debugPrint('UserJoined: $remoteUid');
+        setState(() => _remoteUid = remoteUid);
+      },
+      onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
+        debugPrint('UserOffline: $remoteUid');
+        _end(reason: 'user_left');
+      },
+      onError: (int err, String msg) {
+        debugPrint('Agora error: $err, $msg');
+        if (err != 0 && mounted) {
+          _snack('Erreur Agora: $err');
+          _end(reason: 'error');
+        }
+      },
+    ));
 
-    AgoraRtcEngine.onUserJoined = (connection, remoteUid, elapsed) {
-      debugPrint('UserJoined: $remoteUid');
-      setState(() => _remoteUid = remoteUid);
-    };
-
-    AgoraRtcEngine.onUserOffline = (connection, remoteUid, reason) {
-      debugPrint('UserOffline: $remoteUid');
-      _end(reason: 'user_left');
-    };
-
-    AgoraRtcEngine.onError = (err) {
-      debugPrint('Agora error: $err');
-      if (err != 0 && mounted) {
-        _snack('Erreur Agora: $err');
-        _end(reason: 'error');
-      }
-    };
-
-    await AgoraRtcEngine.enableVideo();
+    await _engine.enableVideo();
     if (!_isVideo) {
-      await AgoraRtcEngine.enableLocalVideo(false);
-      await AgoraRtcEngine.muteLocalVideoStream(true);
+      await _engine.enableLocalVideo(false);
+      await _engine.muteLocalVideoStream(true);
     }
 
-    await AgoraRtcEngine.joinChannel(
+    await _engine.joinChannel(
       token: '',
       channelId: channelName,
       uid: 0,
+      options: const ChannelMediaOptions(),
     );
 
     _connectionTimeout = Timer(const Duration(seconds: 15), () {
@@ -169,15 +178,6 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
     }
   }
 
-  Future<void> _leaveChannel() async {
-    try {
-      await AgoraRtcEngine.leaveChannel();
-      AgoraRtcEngine.destroy();
-    } catch (e) {
-      debugPrint('leaveChannel error: $e');
-    }
-  }
-
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -185,15 +185,15 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
 
   Future<void> _toggleMic() async {
     final enabled = !_micOn;
-    await AgoraRtcEngine.muteLocalAudioStream(!enabled);
+    await _engine.muteLocalAudioStream(!enabled);
     setState(() => _micOn = enabled);
   }
 
   Future<void> _toggleCam() async {
     if (!_isVideo) return;
     final enabled = !_camOn;
-    await AgoraRtcEngine.muteLocalVideoStream(!enabled);
-    await AgoraRtcEngine.enableLocalVideo(enabled);
+    await _engine.muteLocalVideoStream(!enabled);
+    await _engine.enableLocalVideo(enabled);
     setState(() => _camOn = enabled);
   }
 
@@ -212,7 +212,7 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
       debugPrint('completeCall error: $e');
     }
 
-    await _leaveChannel();
+    await _disposeEngine();
     if (mounted) context.pop();
   }
 
@@ -259,7 +259,7 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
                 ],
               ),
             ),
-            // Video view (simplifié pour éviter les erreurs de paramètres)
+            // Video view
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -272,23 +272,25 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
                         : _isVideo && _remoteUid != null
                             ? Stack(
                                 children: [
-                                  // Vue distante - version simplifiée
-                                  Container(
-                                    color: Colors.black,
-                                    child: const Center(
-                                      child: Text('Vidéo distant', style: TextStyle(color: Colors.white)),
+                                  // Vue distante
+                                  AgoraVideoView(
+                                    controller: VideoViewController(
+                                      rtcEngine: _engine,
+                                      canvas: VideoCanvas(uid: _remoteUid!),
                                     ),
                                   ),
                                   // Vue locale (pip)
                                   Positioned(
                                     bottom: 16,
                                     right: 16,
-                                    child: Container(
+                                    child: SizedBox(
                                       width: 100,
                                       height: 140,
-                                      color: Colors.grey[900],
-                                      child: const Center(
-                                        child: Text('Vous', style: TextStyle(color: Colors.white, fontSize: 12)),
+                                      child: AgoraVideoView(
+                                        controller: VideoViewController(
+                                          rtcEngine: _engine,
+                                          canvas: const VideoCanvas(uid: 0),
+                                        ),
                                       ),
                                     ),
                                   ),
