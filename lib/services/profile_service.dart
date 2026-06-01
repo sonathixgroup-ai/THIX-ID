@@ -9,17 +9,12 @@ import 'package:thix_id/services/supabase_safe_write.dart';
 import 'package:thix_id/supabase/supabase_config.dart';
 
 class ProfileService {
-  /// Single Source of Truth (Supabase) for user profiles.
-  ///
-  /// Per project spec, we only use `public.profiles`.
   static const String table = 'profiles';
-
   static const String formationsTable = 'formations';
   static const String experiencesTable = 'experiences';
   static const String emergencyContactsTable = 'contacts_urgence';
   static const String credentialsBucket = 'thix-credentials';
 
-  // Prevent log spam when optional linked tables are missing in Supabase.
   static final Set<String> _disabledOptionalTables = <String>{};
   static bool _isMissingTableError(Object e) => e is PostgrestException && (e.code == 'PGRST205' || e.message.contains('Could not find the table'));
   static bool _isUnknownColumnError(Object e) {
@@ -31,7 +26,6 @@ class ProfileService {
 
   Future<void> _reloadSchemaCache() async {
     try {
-      // Prefer DB-side NOTIFY-based reload (most reliable; no edge function needed).
       try {
         await SupabaseConfig.client.rpc('pgrst_schema_reload');
         debugPrint('ProfileService: requested PostgREST schema reload via RPC');
@@ -39,8 +33,6 @@ class ProfileService {
       } catch (e) {
         debugPrint('ProfileService: schema reload RPC failed (will try edge function) err=$e');
       }
-
-      // Backward-compat: older projects may provide an edge function.
       await SupabaseConfig.client.functions.invoke('pgrst_schema_reload', body: const {});
       debugPrint('ProfileService: requested PostgREST schema reload via edge function');
     } catch (e) {
@@ -53,9 +45,6 @@ class ProfileService {
     if (raw == null) return null;
     final t = raw.trim();
     if (t.isEmpty) return null;
-
-    // If user entered just a year (e.g. "2009"), convert to an ISO date to
-    // satisfy strict `date` columns.
     if (RegExp(r'^\d{4}$').hasMatch(t)) return '$t-01-01';
     if (RegExp(r'^\d{4}-\d{2}$').hasMatch(t)) return '$t-01';
     return t;
@@ -63,11 +52,7 @@ class ProfileService {
 
   Future<List<ThixProfile>> fetchPublicSuggestions({int limit = 12}) async {
     try {
-      final res = await SupabaseConfig.client
-          .from(table)
-          .select()
-          .order('updated_at', ascending: false)
-          .limit(limit);
+      final res = await SupabaseConfig.client.from(table).select().order('updated_at', ascending: false).limit(limit);
       final rows = (res is List) ? res.cast<Map<String, dynamic>>() : const <Map<String, dynamic>>[];
       return rows.map(ThixProfile.fromPrivateRow).where((p) => p.thixId.trim().isNotEmpty).toList(growable: false);
     } catch (e) {
@@ -79,8 +64,6 @@ class ProfileService {
   Future<void> ensureProfileExists({required AppUser user}) async {
     final base = ThixProfile.fallback(userId: user.id, thixId: user.thixId, displayName: user.displayName);
     try {
-      // Keep this payload minimal and future-proof: some projects have a reduced
-      // `public.profiles` schema (missing optional columns like skills, country, etc.).
       await SupabaseSafeWrite.upsert(
         client: SupabaseConfig.client,
         table: table,
@@ -97,13 +80,8 @@ class ProfileService {
   }
 
   Stream<ThixProfile?> streamMyProfile(String userId) {
-    // IMPORTANT (offline-first): some connected Supabase projects have a
-    // reduced `profiles` schema (missing JSON columns like trainings/education).
-    // If we blindly map remote rows and cache them, we may overwrite the local
-    // profile with empty lists. So we always MERGE remote data over the cached
-    // profile, keeping cached fields when the remote row doesn't include them.
     final controller = StreamController<ThixProfile?>.broadcast();
-    RealtimeChannel? channel;
+    Timer? pollTimer;
     var didEmitCached = false;
     var didRunBeforeFetch = false;
 
@@ -148,22 +126,12 @@ class ProfileService {
     controller.onListen = () {
       unawaited(emitCached());
       unawaited(emitLatest());
-      channel = SupabaseConfig.client
-          .channel('rt_${table}_id=$userId')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: table,
-            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'id', value: userId),
-            callback: (payload) => unawaited(emitLatest()),
-          )
-          .subscribe();
+      pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => unawaited(emitLatest()));
     };
 
     controller.onCancel = () {
-      final ch = channel;
-      if (ch != null) SupabaseConfig.client.removeChannel(ch);
-      channel = null;
+      pollTimer?.cancel();
+      controller.close();
     };
 
     return controller.stream;
@@ -181,9 +149,6 @@ class ProfileService {
     );
   }
 
-  /// Stream a public profile by Supabase user id.
-  ///
-  /// Used by Notifications/Reception to display the requester's name + THIX ID.
   Stream<ThixProfile?> streamPublicProfileByUserId(String userId) {
     final uid = userId.trim();
     if (uid.isEmpty) return const Stream<ThixProfile?>.empty();
@@ -219,15 +184,10 @@ class ProfileService {
       return p;
     } catch (e) {
       debugPrint('ProfileService.fetchPublicProfileByThixId failed err=$e');
-      // Fallback local: allows Public View to still show cached data offline.
       return _local.loadPublicProfile(normalized);
     }
   }
 
-  /// Best-effort outbox flush for offline/failed writes.
-  ///
-  /// If we have pending patches stored locally, we try to replay them to Supabase
-  /// (in order). If a replay fails, we stop and keep the remaining patches.
   Future<void> flushPendingProfileWrites(String userId) async {
     final patches = await _local.loadPendingPatches(userId);
     if (patches.isEmpty) return;
@@ -245,7 +205,6 @@ class ProfileService {
       } catch (e) {
         debugPrint('ProfileService.flushPendingProfileWrites failed userId=$userId err=$e');
         remaining.add(patch);
-        // Stop here: if we keep retrying we might reorder writes.
         final idx = patches.indexOf(patch);
         if (idx + 1 < patches.length) {
           remaining.addAll(patches.sublist(idx + 1));
@@ -317,11 +276,8 @@ class ProfileService {
     ThixVisibilitySettings? visibility,
   }) async {
     final authedUid = SupabaseConfig.client.auth.currentUser?.id;
-    // RLS requires user_id/id to match auth.uid(). We always write using the
-    // authenticated uid when available.
     final effectiveUserId = (authedUid != null && authedUid.trim().isNotEmpty) ? authedUid : userId;
 
-    // Keep patch minimal: some Supabase `profiles` schemas reject `updated_at`.
     final data = <String, dynamic>{};
     void put(String k, Object? v) {
       if (v == null) return;
@@ -345,8 +301,6 @@ class ProfileService {
       return double.tryParse(t);
     }
 
-    // NOTE: Some DB schemas don't have `display_name`. We keep `full_name` as
-    // the canonical display label (most compatible across Supabase templates).
     put('full_name', fullName ?? displayName);
     put('avatar_url', photoUrl);
     put('bio', bio);
@@ -370,8 +324,6 @@ class ProfileService {
     putAliases(['origin_territory'], originTerritory);
     putAliases(['origin_sector'], originSector);
     putAliases(['residence_country', 'pays_residence'], residenceCountry);
-    // New secured infra may have renamed these columns; we write both variants
-    // and rely on SupabaseSafeWrite to ignore unknown columns.
     putAliases(['residence_province', 'province_residence'], residenceProvince);
     putAliases(['residence_territory', 'territoire_residence'], residenceTerritory);
     putAliases(['residence_city', 'ville_residence'], residenceCity);
@@ -380,10 +332,8 @@ class ProfileService {
     putAliases(['residence_avenue', 'avenue_residence'], residenceAvenue);
     putAliases(['residence_number', 'numero_residence'], residenceNumber);
     put('emergency_contacts', emergencyContacts);
-    // Keep legacy string columns (if present).
     put('height', height);
     put('weight', weight);
-    // Prefer numeric columns when present (int4/float) to match strict typing.
     final heightNum = _parseDoubleOrNull(height);
     if (heightNum != null) data['height_cm'] = heightNum;
     final weightNum = _parseDoubleOrNull(weight);
@@ -412,8 +362,6 @@ class ProfileService {
     put('contacts', contacts);
     if (visibility != null) data['visibility_settings'] = visibility.toJson();
 
-    // Optimistic local update (offline-first): this makes “Mon Compte” / Public
-    // View feel instant even if network is flaky.
     try {
       final cur = await _local.loadMyProfile(effectiveUserId);
       if (cur != null) {
@@ -425,11 +373,7 @@ class ProfileService {
       debugPrint('ProfileService.updateProfile local optimistic update failed userId=$effectiveUserId err=$e');
     }
 
-    // Use schema-safe update to avoid blocking flows when some optional columns
-    // are not present in `public.profiles`.
     try {
-      // Some schemas use `id` (uuid/text) as the user PK, others rely on a
-      // dedicated `user_id`. We always filter on `id` for this project.
       await SupabaseSafeWrite.update(
         client: SupabaseConfig.client,
         table: table,
@@ -439,15 +383,7 @@ class ProfileService {
       );
       unawaited(flushPendingProfileWrites(effectiveUserId));
 
-      // Best-effort mirroring to linked tables (multi-entries).
-      // If those tables don't exist yet on the project, we ignore errors.
       if (trainings != null || education != null) {
-        // The linked `formations` table is used to store both “formations”
-        // (trainings/certificates) and academic cursus entries.
-        //
-        // Because UI editors may update trainings and education independently,
-        // we merge the latest values with the currently cached profile to avoid
-        // overwriting the other list.
         unawaited(() async {
           try {
             final cur = await _local.loadMyProfile(effectiveUserId);
@@ -463,26 +399,16 @@ class ProfileService {
       if (experience != null) unawaited(replaceExperiences(userId: effectiveUserId, entries: experience));
       if (emergencyContacts != null) unawaited(replaceEmergencyContacts(userId: effectiveUserId, entries: emergencyContacts));
     } catch (e) {
-      // Local fallback: keep patch for later replay.
       await _local.enqueuePendingPatch(effectiveUserId, data);
       debugPrint('ProfileService.updateProfile queued patch for later userId=$effectiveUserId err=$e');
-      // Offline-first: do not block the UI. The patch is queued for later.
       return;
     }
   }
-
-  /// Linked tables API (multi-entries)
-  ///
-  /// These tables are optional per connected Supabase project. The app will:
-  /// - Write to them when available (best effort)
-  /// - Read from them for Public View / Mon Compte live lists when available
-  /// - Fallback to JSON lists stored in `profiles` otherwise
 
   Stream<List<Map<String, dynamic>>> streamFormations(String userId) => _streamListByEq(
         formationsTable,
         key: 'user_id',
         value: userId,
-        // `sort_index` is not present in the current Supabase schema.
         orderBy: null,
       );
 
@@ -521,24 +447,13 @@ class ProfileService {
   Future<void> _replaceLinked({required String tableName, required String userId, required List<Map<String, dynamic>> entries}) async {
     final uid = SupabaseConfig.client.auth.currentUser?.id;
     if (uid == null) return;
-
     if (_disabledOptionalTables.contains(tableName)) return;
+    if (uid != userId) return;
 
     try {
-      // Defensive: only the owner can write; RLS uses auth.uid() = user_id
-      // so we also ensure we only write for the logged user.
-      if (uid != userId) return;
-
       await SupabaseConfig.client.from(tableName).delete().eq('user_id', userId);
       if (entries.isEmpty) return;
 
-      // IMPORTANT:
-      // Some older iterations stored linked rows as `{user_id, payload: jsonb}`.
-      // Your current Supabase schema (formations / experiences) uses *real columns*
-      // (title, organizer, start_date, etc.).
-      //
-      // So we map app entries into the expected columns and only fall back to
-      // payload-style if the schema still supports it.
       if (tableName == formationsTable) {
         await _insertFormations(userId: userId, entries: entries);
         return;
@@ -548,7 +463,6 @@ class ProfileService {
         return;
       }
 
-      // Default (legacy/other tables): keep payload JSON.
       final payload = <Map<String, dynamic>>[];
       for (var i = 0; i < entries.length; i++) {
         payload.add({'user_id': userId, 'payload': entries[i]});
@@ -569,7 +483,6 @@ class ProfileService {
   }
 
   Map<String, dynamic> _trainingEntryToFormationRow(Map<String, dynamic> entry) {
-    // Accept multiple key variants coming from different editors.
     final title = (entry['title'] ?? entry['name'] ?? entry['degree'] ?? entry['level'] ?? '').toString().trim();
     var type = (entry['type'] ?? entry['category'] ?? '').toString().trim();
     final organizer = (entry['organizer'] ?? entry['organized_by'] ?? entry['provider'] ?? entry['institution'] ?? '').toString().trim();
@@ -578,12 +491,8 @@ class ProfileService {
     final duration = (entry['duration'] ?? entry['period'] ?? '').toString().trim();
     final skills = (entry['skills'] ?? entry['skills_acquired'] ?? entry['competences'] ?? '').toString().trim();
 
-    // If this looks like an academic cursus entry, default the type.
     if (type.isEmpty && entry.containsKey('institution')) type = 'Études';
 
-    // Keep verification fields inside payload for maximum schema compatibility.
-    // If the linked table uses a `{payload}` jsonb column, this map will be
-    // inserted as-is.
     return {
       'title': title.isEmpty ? null : title,
       'name': title.isEmpty ? null : title,
@@ -607,8 +516,6 @@ class ProfileService {
     final startDate = _normalizeDateOrNull((entry['start_date'] ?? entry['start'] ?? entry['startYear'] ?? '').toString());
     final endDate = _normalizeDateOrNull((entry['end_date'] ?? entry['end'] ?? entry['endYear'] ?? '').toString());
 
-    // The in-app editor uses `missions` + `sector` + `city`. We keep them in
-    // `description` if dedicated columns are not present.
     final missions = (entry['description'] ?? entry['missions'] ?? entry['tasks'] ?? '').toString().trim();
     final sector = (entry['sector'] ?? entry['industry'] ?? '').toString().trim();
     final city = (entry['city'] ?? '').toString().trim();
@@ -619,8 +526,6 @@ class ProfileService {
     final description = descParts.join('\n');
 
     return {
-      // Write multiple aliases to survive column naming drift; SupabaseSafeWrite
-      // will strip unknown columns.
       'company_name': companyName.isEmpty ? null : companyName,
       'company': companyName.isEmpty ? null : companyName,
       'employer': companyName.isEmpty ? null : companyName,
@@ -651,7 +556,6 @@ class ProfileService {
     try {
       await SupabaseSafeWrite.insertMany(client: SupabaseConfig.client, table: tableName, rows: rows, onUnknownColumn: _reloadSchemaCache);
     } catch (e) {
-      // If the schema is still the legacy `{payload}` shape, fall back.
       if (_isUnknownColumnError(e)) {
         debugPrint('ProfileService: formations schema mismatch; falling back to payload rows. err=$e');
         final legacy = entries.map((m) => {'user_id': userId, 'payload': m}).toList(growable: false);
@@ -694,7 +598,7 @@ class ProfileService {
   }) {
     if (_disabledOptionalTables.contains(table)) return const Stream<List<Map<String, dynamic>>>.empty();
     final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
-    RealtimeChannel? channel;
+    Timer? pollTimer;
     var didEmitOnce = false;
 
     Future<void> emitLatest() async {
@@ -723,22 +627,12 @@ class ProfileService {
     controller.onListen = () {
       unawaited(emitLatest());
       if (_disabledOptionalTables.contains(table)) return;
-      channel = SupabaseConfig.client
-          .channel('rt_${table}_$key=$value')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: table,
-            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: key, value: value),
-            callback: (payload) => unawaited(emitLatest()),
-          )
-          .subscribe();
+      pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => unawaited(emitLatest()));
     };
 
     controller.onCancel = () {
-      final ch = channel;
-      if (ch != null) SupabaseConfig.client.removeChannel(ch);
-      channel = null;
+      pollTimer?.cancel();
+      controller.close();
     };
 
     return controller.stream;
@@ -748,10 +642,6 @@ class ProfileService {
     await updateProfile(userId: userId, visibility: visibility);
   }
 
-  /// Payment-gated account activation.
-  ///
-  /// Generates a unique THIX UID in Supabase (DB-side), upserts the profile row,
-  /// and stores a payment audit entry.
   Future<String> activateAccountAfterPayment({
     required String userId,
     required String countryCode,
@@ -795,7 +685,7 @@ class ProfileService {
     Future<void> Function()? onBeforeFirstRemoteFetch,
   }) {
     final controller = StreamController<T?>.broadcast();
-    RealtimeChannel? channel;
+    Timer? pollTimer;
     var didEmitCached = false;
     var didRunBeforeFetch = false;
 
@@ -826,8 +716,6 @@ class ProfileService {
         if (saveCached != null) unawaited(saveCached(mapped));
       } catch (e) {
         debugPrint('ProfileService.streamSingle emitLatest failed table=$table err=$e');
-        // Do not clear UI if remote fails; cached data (if any) should remain.
-        // We still emit null if we never had a cache.
         if (!didEmitCached) controller.add(null);
       }
     }
@@ -835,24 +723,12 @@ class ProfileService {
     controller.onListen = () {
       unawaited(emitCached());
       unawaited(emitLatest());
-      channel = SupabaseConfig.client
-          .channel('rt_${table}_$key=$value')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: table,
-            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: key, value: value),
-            callback: (payload) => unawaited(emitLatest()),
-          )
-          .subscribe();
+      pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => unawaited(emitLatest()));
     };
 
     controller.onCancel = () {
-      final ch = channel;
-      if (ch != null) {
-        SupabaseConfig.client.removeChannel(ch);
-      }
-      channel = null;
+      pollTimer?.cancel();
+      controller.close();
     };
 
     return controller.stream;
