@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:thix_id/auth/auth_controller.dart';
 import 'package:thix_id/models/app_user.dart';
+import 'package:thix_id/models/event_item.dart';
 
 // Pages principales
-import 'presentation/home/home_page.dart';          // contient HomePagePremium ?
+import 'presentation/home/home_page.dart';
 import 'presentation/auth/login_page.dart';
 
 // Pages Events
@@ -16,27 +17,20 @@ import 'package:thix_id/presentation/events/event_ticket_page.dart';
 import 'package:thix_id/presentation/events/event_checkout_page.dart';
 import 'package:thix_id/presentation/events/user_event_dashboard_page.dart';
 
-// Pages Media (chemins corrigés)
+// Pages Media
 import 'package:thix_id/presentation/thix_media/thix_media_page.dart';
 import 'package:thix_id/presentation/admin/pages/admin_media_page.dart';
 
 // ============================================================================
-// Page avec transition Material (selon votre demande)
+// Page sans transition
 // ============================================================================
 class NoTransitionPage<T> extends Page<T> {
   final Widget child;
-
-  const NoTransitionPage({
-    required this.child,
-    super.key,
-  });
+  const NoTransitionPage({required this.child, super.key});
 
   @override
   Route<T> createRoute(BuildContext context) {
-    return MaterialPageRoute<T>(
-      builder: (_) => child,
-      settings: this,
-    );
+    return MaterialPageRoute<T>(builder: (_) => child, settings: this);
   }
 }
 
@@ -69,17 +63,11 @@ class AppRouter {
       initialLocation: AppRoutes.home,
       refreshListenable: refresh,
       redirect: (context, state) {
-        // Exemple de logique de redirection (à adapter)
-        // final isLogged = auth.currentUser != null;
-        // final isLoginRoute = state.matchedLocation == AppRoutes.login;
-        //
-        // if (!isLogged && !isLoginRoute) return AppRoutes.login;
-        // if (isLogged && isLoginRoute) return AppRoutes.home;
-
-        return null; // Pas de redirection par défaut
+        // Logique de redirection (à adapter selon vos besoins)
+        return null;
       },
       routes: [
-        // ---------- Accueil (avec HomePagePremium) ----------
+        // ---------- Accueil ----------
         GoRoute(
           path: AppRoutes.home,
           name: 'home',
@@ -103,7 +91,7 @@ class AppRouter {
               const NoTransitionPage(child: EventsPage()),
         ),
 
-        // ⚠️ Route fixe AVANT la route dynamique
+        // Route fixe AVANT la route dynamique
         GoRoute(
           path: AppRoutes.userEventsDashboard,
           name: 'userEventsDashboard',
@@ -127,26 +115,34 @@ class AppRouter {
           },
         ),
 
-        // /events/:eventId/register
+        // ✅ Route Register avec state.extra
         GoRoute(
           path: '/events/:eventId/register',
           name: 'eventRegister',
           pageBuilder: (context, state) {
-            final eventId = state.pathParameters['eventId'] ?? '';
+            final event = state.extra as EventItem;
             return NoTransitionPage(
-              child: EventRegisterPage(eventId: eventId),
+              child: EventRegisterPage(event: event),
             );
           },
         ),
 
-        // /events/:eventId/checkout
+        // ✅ Route Checkout avec state.extra
         GoRoute(
           path: '/events/:eventId/checkout',
           name: 'eventCheckout',
           pageBuilder: (context, state) {
-            final eventId = state.pathParameters['eventId'] ?? '';
+            final data = state.extra as Map<String, dynamic>;
             return NoTransitionPage(
-              child: EventCheckoutPage(eventId: eventId), // constructeur vérifié
+              child: EventCheckoutPage(
+                event: data['event'],
+                tickets: data['tickets'],
+                attendeeThixId: data['attendeeThixId'],
+                attendeeName: data['attendeeName'],
+                attendeeEmail: data['attendeeEmail'],
+                attendeePhone: data['attendeePhone'],
+                note: data['note'],
+              ),
             );
           },
         ),
@@ -186,17 +182,15 @@ class AppRouter {
 }
 
 // ============================================================================
-// Extension utilitaire pour la navigation (pop ou go)
+// Extension utilitaire
 // ============================================================================
 extension GoRouterBackHelpers on BuildContext {
   void popOrGo(String fallbackLocation) {
     final router = GoRouter.of(this);
-
     if (router.canPop()) {
       pop();
       return;
     }
-
     go(fallbackLocation);
   }
 }
