@@ -75,6 +75,10 @@ class CallService {
     return uid == 0 ? 1 : uid;
   }
 
+  String? getCurrentUserId() {
+    return _client.auth.currentUser?.id;
+  }
+
   Future<Map<String, dynamic>> fetchAgoraToken({required String channel, required int uid, required String role}) async {
     try {
       final res = await _client.functions.invoke(
@@ -143,9 +147,8 @@ class CallService {
 
   Stream<List<Map<String, dynamic>>> streamSignals({required String callId, required String forUserId}) {
     final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
-    final channel = _client.channel('thix_call_signals:$callId:$forUserId');
-    final filterCall = PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'call_id', value: callId);
-
+    
+    // Écouter les changements en temps réel via un stream simple
     Future<void> emitLatest() async {
       try {
         final rows = await _client
@@ -156,31 +159,24 @@ class CallService {
             .order('created_at', ascending: false)
             .limit(50);
         final list = (rows is List) ? rows.map((r) => (r as Map).cast<String, dynamic>()).toList(growable: false) : const <Map<String, dynamic>>[];
-        controller.add(list);
+        if (!controller.isClosed) controller.add(list);
       } catch (e) {
         debugPrint('CallService: streamSignals emitLatest failed call=$callId for=$forUserId err=$e');
-        controller.add(const <Map<String, dynamic>>[]);
+        if (!controller.isClosed) controller.add(const <Map<String, dynamic>>[]);
       }
     }
 
+    // Polling toutes les 2 secondes (fallback si Realtime ne fonctionne pas)
+    Timer? pollTimer;
+
     controller.onListen = () {
       unawaited(emitLatest());
-      channel
-          .onPostgresChanges(
-            event: PostgresChangeEvent.insert,
-            schema: 'public',
-            table: signalsTable,
-            filter: filterCall,
-            callback: (_) => unawaited(emitLatest()), // ✅ correction : callback requis
-          )
-          .subscribe((status, err) {
-            if (err != null) debugPrint('CallService: signals realtime subscribe error status=$status err=$err');
-          });
+      pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => unawaited(emitLatest()));
     };
 
-    controller.onCancel = () async {
-      await _client.removeChannel(channel);
-      await controller.close();
+    controller.onCancel = () {
+      pollTimer?.cancel();
+      controller.close();
     };
 
     return controller.stream;
@@ -223,8 +219,7 @@ class CallService {
 
   Stream<List<ThixCall>> streamIncomingOngoingCalls({required String receiverId}) {
     final controller = StreamController<List<ThixCall>>.broadcast();
-    final channel = _client.channel('call_history:incoming:$receiverId');
-    final filter = PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'receiver_id', value: receiverId);
+    Timer? pollTimer;
 
     Future<void> emitLatest() async {
       try {
@@ -238,35 +233,23 @@ class CallService {
         final list = (rows is List)
             ? rows.map((r) => ThixCall.fromRow((r as Map).cast<String, dynamic>())).toList(growable: false)
             : const <ThixCall>[];
-        controller.add(list);
+        if (!controller.isClosed) controller.add(list);
       } catch (e) {
         debugPrint('CallService: emitLatest incoming failed receiver=$receiverId err=$e');
-        controller.add(const <ThixCall>[]);
+        if (!controller.isClosed) controller.add(const <ThixCall>[]);
       }
     }
 
     controller.onListen = () {
       unawaited(emitLatest());
-      channel
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: table,
-            filter: filter,
-            callback: (_) => unawaited(emitLatest()), // ✅ correction : callback requis
-          )
-          .subscribe((status, err) {
-            if (err != null) debugPrint('CallService: realtime incoming subscribe error=$err');
-          });
+      pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => unawaited(emitLatest()));
     };
 
-    controller.onCancel = () async {
-      await _client.removeChannel(channel);
-      _activeChannels.remove(channel);
-      await controller.close();
+    controller.onCancel = () {
+      pollTimer?.cancel();
+      controller.close();
     };
 
-    _activeChannels.add(channel);
     return controller.stream;
   }
 
