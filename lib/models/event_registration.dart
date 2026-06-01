@@ -1,65 +1,382 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class EventRegistration {
-  final String id;
-  final String eventId;
-  final String? userId;
-  final String attendeeThixId;
-  final int tickets; // Utilisé pour la quantité
-  final String ticketCode;
-  final String status;
-  final DateTime? checkedInAt;
-  final String? note;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  final num? price; // Ajouté pour calculer le prix total
+import '../../models/event_item.dart';
+import '../../services/event_service.dart';
 
-  const EventRegistration({
-    required this.id,
+class EventRegistrationPage extends StatefulWidget {
+  final String eventId;
+
+  const EventRegistrationPage({
+    super.key,
     required this.eventId,
-    this.userId,
-    required this.attendeeThixId,
-    required this.tickets,
-    required this.ticketCode,
-    required this.status,
-    this.checkedInAt,
-    this.note,
-    required this.createdAt,
-    required this.updatedAt,
-    this.price,
   });
 
-  // ==========================================================================
-  // GETTERS DE COMPATIBILITÉ (Corrige les erreurs de votre UI)
-  // ==========================================================================
-  
-  int get quantity => tickets;
-  String get thixCode => ticketCode;
-  String get attendeeName => attendeeThixId;
-  
-  // Calcul du prix total si le prix est connu
-  num get totalPrice => tickets * (price ?? 0);
+  @override
+  State<EventRegistrationPage> createState() =>
+      _EventRegistrationPageState();
+}
 
-  // ==========================================================================
-  // FABRIQUE
-  // ==========================================================================
+class _EventRegistrationPageState
+    extends State<EventRegistrationPage> {
+  late final EventService _eventService;
 
-  factory EventRegistration.fromJson(Map<String, dynamic> json) {
-    return EventRegistration(
-      id: json['id']?.toString() ?? '',
-      eventId: json['event_id']?.toString() ?? '',
-      userId: json['user_id']?.toString(),
-      attendeeThixId: json['attendee_thix_id']?.toString() ?? '',
-      tickets: (json['tickets'] is num) ? (json['tickets'] as num).toInt() : 1,
-      ticketCode: json['ticket_code']?.toString() ?? '',
-      status: json['status']?.toString() ?? 'registered',
-      checkedInAt: json['checked_in_at'] != null 
-          ? DateTime.tryParse(json['checked_in_at'].toString()) 
-          : null,
-      note: json['note']?.toString(),
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
-      updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? '') ?? DateTime.now(),
-      price: json['price'] as num?,
+  bool _loading = true;
+  bool _submitting = false;
+
+  EventItem? _event;
+
+  int _tickets = 1;
+
+  final TextEditingController _noteController =
+      TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _eventService =
+        EventService(Supabase.instance.client);
+
+    _loadEvent();
+  }
+
+  Future<void> _loadEvent() async {
+    final event =
+        await _eventService.getEventById(widget.eventId);
+
+    if (!mounted) return;
+
+    setState(() {
+      _event = event;
+      _loading = false;
+    });
+  }
+
+  double get _totalPrice {
+    if (_event == null) return 0;
+
+    return _event!.price * _tickets;
+  }
+
+  Future<void> _register() async {
+    final user =
+        Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Veuillez vous connecter'),
+        ),
+      );
+      return;
+    }
+
+    if (_event == null) return;
+
+    setState(() {
+      _submitting = true;
+    });
+
+    try {
+      final ticketCode =
+          'THIX-${DateTime.now().millisecondsSinceEpoch}';
+
+      final registrationId = await Supabase
+          .instance.client
+          .from('thix_event_tickets')
+          .insert({
+        'user_id': user.id,
+        'event_id': _event!.id,
+        'ticket_code': ticketCode,
+        'attendee_thix_id': user.id,
+        'tickets': _tickets,
+        'note': _noteController.text.trim(),
+        'status': 'valid',
+        'created_at':
+            DateTime.now().toIso8601String(),
+      })
+          .select('id')
+          .single();
+
+      if (!mounted) return;
+
+      context.go(
+        '/events/${_event!.id}/ticket/${registrationId['id']}',
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Erreur: $e',
+          ),
+        ),
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _submitting = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_event == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'Événement introuvable',
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xffF8FAFC),
+
+      appBar: AppBar(
+        title: const Text(
+          'Réserver',
+        ),
+      ),
+
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            _buildEventCard(),
+
+            const SizedBox(height: 24),
+
+            _buildTicketSelector(),
+
+            const SizedBox(height: 24),
+
+            _buildNoteField(),
+
+            const SizedBox(height: 24),
+
+            _buildPriceSummary(),
+
+            const SizedBox(height: 32),
+
+            SizedBox(
+              width: double.infinity,
+              height: 55,
+              child: FilledButton(
+                onPressed:
+                    _submitting ? null : _register,
+                child: _submitting
+                    ? const CircularProgressIndicator(
+                        color: Colors.white,
+                      )
+                    : const Text(
+                        'Confirmer la réservation',
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
+  }
+
+  Widget _buildEventCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Text(
+            _event!.title,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(
+                Icons.location_on,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _event!.location,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(
+                Icons.calendar_month,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _formatDate(
+                  _event!.startsAt,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTicketSelector() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Nombre de billets',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              IconButton(
+                onPressed: _tickets > 1
+                    ? () {
+                        setState(() {
+                          _tickets--;
+                        });
+                      }
+                    : null,
+                icon: const Icon(
+                  Icons.remove_circle,
+                ),
+              ),
+              Text(
+                _tickets.toString(),
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _tickets++;
+                  });
+                },
+                icon: const Icon(
+                  Icons.add_circle,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteField() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(20),
+      ),
+      child: TextField(
+        controller: _noteController,
+        maxLines: 3,
+        decoration: const InputDecoration(
+          labelText: 'Note (optionnel)',
+          border: OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPriceSummary() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+            BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          _row(
+            'Prix unitaire',
+            _event!.priceLabel,
+          ),
+          const SizedBox(height: 10),
+          _row(
+            'Billets',
+            _tickets.toString(),
+          ),
+          const Divider(height: 30),
+          _row(
+            'TOTAL',
+            '${_totalPrice.toStringAsFixed(2)} USD',
+            bold: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(
+    String label,
+    String value, {
+    bool bold = false,
+  }) {
+    return Row(
+      children: [
+        Text(label),
+        const Spacer(),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: bold
+                ? FontWeight.bold
+                : FontWeight.normal,
+            fontSize: bold ? 18 : 14,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return "${date.day}/${date.month}/${date.year}";
   }
 }
