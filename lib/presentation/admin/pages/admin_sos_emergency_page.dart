@@ -23,7 +23,6 @@ class _AdminSosEmergencyPageState extends State<AdminSosEmergencyPage> {
   String? _error;
   List<Map<String, dynamic>> _alerts = const [];
 
-  RealtimeChannel? _channel;
   Timer? _debounce;
 
   @override
@@ -31,7 +30,6 @@ class _AdminSosEmergencyPageState extends State<AdminSosEmergencyPage> {
     super.initState();
     _search.addListener(_onSearchChanged);
     _load();
-    _subscribeRealtime();
   }
 
   void _onSearchChanged() {
@@ -47,9 +45,6 @@ class _AdminSosEmergencyPageState extends State<AdminSosEmergencyPage> {
       _error = null;
     });
     try {
-      // Schema-safe: do not select explicit columns because some deployments may
-      // not have all optional fields (ex: `title`, `description`). Selecting a
-      // missing column triggers Postgres error 42703.
       final rows = await SupabaseConfig.client.from('thix_emergency_alerts').select().order('created_at', ascending: false).limit(250);
       if (!mounted) return;
       if (rows is List) {
@@ -64,33 +59,11 @@ class _AdminSosEmergencyPageState extends State<AdminSosEmergencyPage> {
     }
   }
 
-  void _subscribeRealtime() {
-    try {
-      _channel = SupabaseConfig.client.channel('admin:sos_alerts');
-      _channel!
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'thix_emergency_alerts',
-            callback: (_) {
-              // Reload lightweight list when new alert arrives / status changes.
-              unawaited(_load());
-            },
-          )
-          .subscribe();
-    } catch (e) {
-      debugPrint('AdminSosEmergencyPage: realtime subscribe failed: $e');
-    }
-  }
-
   @override
   void dispose() {
     _debounce?.cancel();
     _search.removeListener(_onSearchChanged);
     _search.dispose();
-    try {
-      if (_channel != null) SupabaseConfig.client.removeChannel(_channel!);
-    } catch (_) {}
     super.dispose();
   }
 
@@ -128,7 +101,6 @@ class _AdminSosEmergencyPageState extends State<AdminSosEmergencyPage> {
   Future<void> _changeStatus({required String alertId, required String status}) async {
     try {
       await SupabaseConfig.client.from('thix_emergency_alerts').update({'status': status, 'updated_at': DateTime.now().toIso8601String()}).eq('id', alertId);
-      // Realtime should refresh, but keep UI responsive.
       unawaited(_load());
     } catch (e) {
       debugPrint('AdminSosEmergencyPage: change status failed err=$e');
@@ -308,7 +280,6 @@ class _AlertTile extends StatelessWidget {
   }
 
   static String _staticMapUrl({required Object lat, required Object lng}) {
-    // No API key required.
     final cLat = Uri.encodeComponent(lat.toString());
     final cLng = Uri.encodeComponent(lng.toString());
     return 'https://staticmap.openstreetmap.de/staticmap.php?center=$cLat,$cLng&zoom=15&size=900x450&maptype=mapnik&markers=$cLat,$cLng,red-pushpin';
@@ -324,7 +295,6 @@ class _AlertDetailsSheet extends StatefulWidget {
 }
 
 class _AlertDetailsSheetState extends State<_AlertDetailsSheet> {
-  RealtimeChannel? _channel;
   Map<String, dynamic> _row = const {};
   double? _lat;
   double? _lng;
@@ -344,7 +314,6 @@ class _AlertDetailsSheetState extends State<_AlertDetailsSheet> {
   void initState() {
     super.initState();
     _applyRow(widget.initialRow);
-    _subscribe();
     unawaited(_refreshRow());
   }
 
@@ -357,62 +326,6 @@ class _AlertDetailsSheetState extends State<_AlertDetailsSheet> {
     final locAt = r['last_location_at'];
     _lastLocAt = (locAt is String) ? DateTime.tryParse(locAt) : null;
     _audioPath = (r['audio_path'] ?? r['audioPath'])?.toString();
-  }
-
-  void _subscribe() {
-    final id = (_row['id'] ?? '').toString();
-    if (id.isEmpty) return;
-    try {
-      _channel = SupabaseConfig.client.channel('admin:sos_details:$id');
-      _channel!
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'thix_emergency_alerts',
-            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'id', value: id),
-            callback: (payload) {
-              final newRow = payload.newRecord;
-              if (newRow.isEmpty) return;
-              if (!mounted) return;
-              setState(() => _applyRow(newRow));
-              unawaited(_refreshAudio());
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.insert,
-            schema: 'public',
-            table: 'thix_emergency_locations',
-            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'alert_id', value: id),
-            callback: (payload) {
-              final r = payload.newRecord;
-              final lat = r['lat'];
-              final lng = r['lng'];
-              final capturedAt = r['captured_at'];
-              if (!mounted) return;
-              setState(() {
-                _lat = (lat is num) ? lat.toDouble() : double.tryParse(lat?.toString() ?? '');
-                _lng = (lng is num) ? lng.toDouble() : double.tryParse(lng?.toString() ?? '');
-                _lastLocAt = (capturedAt is String) ? DateTime.tryParse(capturedAt) : DateTime.now();
-              });
-            },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.insert,
-            schema: 'public',
-            table: 'thix_emergency_evidence',
-            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'alert_id', value: id),
-            callback: (payload) {
-              final r = payload.newRecord;
-              final kind = (r['kind'] ?? '').toString();
-              if (kind != 'audio') return;
-              if (!mounted) return;
-              unawaited(_refreshRow());
-            },
-          )
-          .subscribe();
-    } catch (e) {
-      debugPrint('AdminSOS: details subscribe failed: $e');
-    }
   }
 
   Future<void> _refreshRow() async {
@@ -440,7 +353,6 @@ class _AlertDetailsSheetState extends State<_AlertDetailsSheet> {
     if (_audioLoading) return;
     setState(() => _audioLoading = true);
     try {
-      // Signed URL so the bucket can stay private.
       final signed = await SupabaseConfig.client.storage.from('thix-emergency').createSignedUrl(storagePath, 60);
       final uri = Uri.tryParse(signed);
       if (uri == null) return;
@@ -467,9 +379,6 @@ class _AlertDetailsSheetState extends State<_AlertDetailsSheet> {
 
   @override
   void dispose() {
-    try {
-      if (_channel != null) SupabaseConfig.client.removeChannel(_channel!);
-    } catch (_) {}
     try {
       _audioController?.dispose();
     } catch (_) {}
@@ -531,7 +440,6 @@ class _AlertDetailsSheetState extends State<_AlertDetailsSheet> {
             ],
             const SizedBox(height: 12),
 
-            // Live map (auto-updated by realtime)
             if (hasLoc) ...[
               Text('Position live: ${_lat!.toStringAsFixed(5)}, ${_lng!.toStringAsFixed(5)}', style: theme.textTheme.bodySmall?.copyWith(color: AdminCyberColors.textDim)),
               const SizedBox(height: 10),
@@ -560,7 +468,6 @@ class _AlertDetailsSheetState extends State<_AlertDetailsSheet> {
                 ),
                 onPressed: () {
                   final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=${_lat!},${_lng!}');
-                  // ignore: discarded_futures
                   launchUrl(url, mode: LaunchMode.externalApplication);
                 },
                 icon: const Icon(Icons.map_rounded, color: AdminCyberColors.neonCyan),
