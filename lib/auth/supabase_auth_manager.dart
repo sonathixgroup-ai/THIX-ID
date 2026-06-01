@@ -58,10 +58,6 @@ class SupabaseAuthManager implements AuthManager {
       }
     });
 
-    // Hydrate initial session if already persisted.
-    // IMPORTANT: Supabase can sometimes expose a `currentUser` without a valid
-    // session (e.g. after refresh/restore). Writes would then happen with anon
-    // role and be rejected by RLS. We treat this as unauthenticated.
     final s = _client.auth.currentSession;
     final u = s?.user;
     if (u == null) {
@@ -76,8 +72,6 @@ class SupabaseAuthManager implements AuthManager {
   }
 
   void _bindProfileSync(String uid) {
-    // Keep AuthController's `currentUser` always consistent with `public.profiles`.
-    // This is what makes “Mon Compte” changes instantly visible everywhere.
     unawaited(_profileSub?.cancel());
     _profileSub = _profiles.streamMyProfile(uid).listen(
       (p) {
@@ -85,7 +79,6 @@ class SupabaseAuthManager implements AuthManager {
         final cur = _currentUser.value;
         if (cur == null || cur.id != uid) return;
 
-        // Merge profile fields into the in-memory AppUser.
         final merged = cur.copyWith(
           thixId: p.thixId.trim().isEmpty ? cur.thixId : p.thixId.trim(),
           thixChat: (p.thixChat ?? '').trim().isEmpty ? cur.thixChat : (p.thixChat ?? '').trim(),
@@ -114,7 +107,6 @@ class SupabaseAuthManager implements AuthManager {
           updatedAt: p.updatedAt,
         );
 
-        // Avoid spamming notifications if nothing changed.
         final unchanged = merged.displayName == cur.displayName &&
             merged.photoUrl == cur.photoUrl &&
             merged.bio == cur.bio &&
@@ -152,10 +144,8 @@ class SupabaseAuthManager implements AuthManager {
     final email = (user.email ?? '').toLowerCase();
     final meta = (user.userMetadata ?? const <String, dynamic>{});
 
-    // Try to fetch private profile row.
     final row = await _selectProfileRow(uid);
     if (row == null) {
-      // Ensure minimal row exists (id-based) so downstream services work.
       String? s(String k) {
         final v = meta[k];
         if (v == null) return null;
@@ -184,8 +174,8 @@ class SupabaseAuthManager implements AuthManager {
         contactPhone: s('contact_phone') ?? s('contactPhone'),
         maritalStatus: s('marital_status') ?? s('maritalStatus'),
         gender: s('gender'),
-          occupation: s('occupation'),
-          profession: s('profession'),
+        occupation: s('occupation'),
+        profession: s('profession'),
         dateOfBirth: s('date_of_birth') ?? s('dateOfBirth'),
         placeOfBirth: s('place_of_birth') ?? s('placeOfBirth'),
         nationality: s('nationality'),
@@ -279,7 +269,6 @@ class SupabaseAuthManager implements AuthManager {
   }
 
   Future<Map<String, dynamic>?> _selectProfileRow(String uid) async {
-    // Single source of truth: `public.profiles`.
     try {
       final row = await _client.from('profiles').select('*').eq('id', uid).maybeSingle();
       if (row != null) return (row as Map).cast<String, dynamic>();
@@ -291,18 +280,11 @@ class SupabaseAuthManager implements AuthManager {
 
   Future<void> _ensureProfileRow({required String userId, required AppUser user}) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    // Keep the upsert payload intentionally SMALL.
-    // Many Supabase projects connected to Dreamflow have a reduced `profiles`
-    // schema (only a few columns). Sending a large payload causes PostgREST
-    // schema-cache errors (PGRST204) that can block critical flows like signup
-    // and trial activation.
     final payload = <String, dynamic>{
       'id': userId,
       'thix_id': user.thixId,
-      // Optional (only written if the column exists).
       'thix_chat': user.thixChat,
       'bio': user.bio,
-      // Newer schema fields (safe-written; unknown columns are stripped).
       'profession': user.profession,
       'occupation': user.occupation,
       'display_name': user.displayName,
@@ -322,7 +304,6 @@ class SupabaseAuthManager implements AuthManager {
       'emergency_contact_relation': user.emergencyContactRelation,
       'languages': user.languages,
       'registration_status': user.registrationStatus,
-      // Optional timestamps.
       'created_at': now,
       'updated_at': now,
     };
@@ -352,7 +333,6 @@ class SupabaseAuthManager implements AuthManager {
     if (id.isEmpty) throw AuthException('Identifiant requis.');
     if (password.isEmpty) throw AuthException('Mot de passe requis.');
 
-    // Supabase sign-in requires an email (unless you implement custom JWT/RPC).
     if (!id.contains('@')) {
       throw AuthException('Connexion via THIX ID non disponible. Utilisez votre email.');
     }
@@ -365,17 +345,8 @@ class SupabaseAuthManager implements AuthManager {
       _currentUser.value = hydrated;
       _bindProfileSync(user.id);
       return hydrated;
-    } on AuthException {
-      rethrow;
-    } on AuthException catch (e) {
-      throw AuthException(e.message);
-    } on AuthApiException catch (e, st) {
-      debugPrint('SupabaseAuthManager: signIn AuthApiException status=${e.statusCode} message=${e.message}');
-      debugPrint('$st');
-      throw AuthException(_mapAuthError(e));
-    } catch (e, st) {
+    } catch (e) {
       debugPrint('SupabaseAuthManager: signIn failed err=$e');
-      debugPrint('$st');
       throw AuthException('Connexion impossible.');
     }
   }
@@ -408,13 +379,7 @@ class SupabaseAuthManager implements AuthManager {
 
       final session = res.session;
       final user = res.user;
-      // IMPORTANT:
-      // If email confirmation is enabled, Supabase returns a user but NO session.
-      // Without a session, requests use the anon role and RLS will reject writes
-      // to `public.profiles` (42501).
       if (user == null || session == null) {
-        // Email confirmation enabled: metadata IS saved in Supabase Auth, but we
-        // cannot write `public.profiles` yet due to missing JWT (RLS).
         throw AuthException(
           'Inscription enregistrée. Confirmez votre email puis connectez-vous: votre profil sera créé automatiquement.',
         );
@@ -468,14 +433,8 @@ class SupabaseAuthManager implements AuthManager {
 
       _currentUser.value = appUser;
       return appUser;
-    } on AuthApiException catch (e, st) {
-      debugPrint('SupabaseAuthManager: register AuthApiException status=${e.statusCode} message=${e.message}');
-      debugPrint('$st');
-      throw AuthException(_mapAuthError(e));
-    } catch (e, st) {
+    } catch (e) {
       debugPrint('SupabaseAuthManager: register failed err=$e');
-      debugPrint('$st');
-      if (e is AuthException) rethrow;
       throw AuthException('Inscription impossible.');
     }
   }
@@ -500,8 +459,6 @@ class SupabaseAuthManager implements AuthManager {
 
   @override
   Future<void> deleteAccount() async {
-    // Supabase client SDK cannot delete users with anon key.
-    // This must be done via an Edge Function using service_role.
     throw AuthException('Suppression du compte indisponible (nécessite une fonction serveur).');
   }
 
@@ -511,8 +468,8 @@ class SupabaseAuthManager implements AuthManager {
     if (!_isValidEmail(normalized)) throw AuthException('Email invalide.');
     try {
       await _client.auth.updateUser(UserAttributes(email: normalized));
-    } on AuthApiException catch (e) {
-      throw AuthException(_mapAuthError(e));
+    } catch (e) {
+      throw AuthException('Impossible de mettre à jour l\'email.');
     }
   }
 
@@ -522,8 +479,8 @@ class SupabaseAuthManager implements AuthManager {
     if (!_isValidEmail(normalized)) throw AuthException('Email invalide.');
     try {
       await _client.auth.resetPasswordForEmail(normalized);
-    } on AuthApiException catch (e) {
-      throw AuthException(_mapAuthError(e));
+    } catch (e) {
+      throw AuthException('Impossible d\'envoyer la demande de réinitialisation.');
     }
   }
 
@@ -541,15 +498,6 @@ class SupabaseAuthManager implements AuthManager {
     }
     _currentUser.value = user;
     _bindProfileSync(user.id);
-  }
-
-  String _mapAuthError(AuthApiException e) {
-    final msg = (e.message).trim();
-    final code = (e.statusCode ?? 0).toString();
-    if (msg.toLowerCase().contains('invalid login credentials')) return 'Identifiant ou mot de passe incorrect.';
-    if (msg.toLowerCase().contains('user already registered')) return 'Un compte existe déjà avec cet email.';
-    if (msg.toLowerCase().contains('password')) return 'Mot de passe invalide.';
-    return msg.isNotEmpty ? 'Erreur d’authentification ($code): $msg' : 'Erreur d’authentification.';
   }
 
   bool _isValidEmail(String email) => RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
