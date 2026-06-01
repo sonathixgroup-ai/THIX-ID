@@ -1,313 +1,401 @@
 import 'package:barcode_widget/barcode_widget.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:thix_id/models/event_item.dart';
-import 'package:thix_id/models/event_registration.dart';
-import 'package:thix_id/nav.dart';
-import 'package:thix_id/services/event_service.dart';
-import 'package:thix_id/theme.dart';
+
+import '../../models/event_item.dart';
+import '../../models/event_registration.dart';
+import '../../services/event_service.dart';
 
 class EventTicketPage extends StatefulWidget {
   final String eventId;
   final String registrationId;
 
-  const EventTicketPage({super.key, required this.eventId, required this.registrationId});
+  const EventTicketPage({
+    super.key,
+    required this.eventId,
+    required this.registrationId,
+  });
 
   @override
   State<EventTicketPage> createState() => _EventTicketPageState();
 }
 
 class _EventTicketPageState extends State<EventTicketPage> {
-  late final EventService _eventService;
+  late final EventService _service;
 
   @override
   void initState() {
     super.initState();
-    _eventService = EventService(Supabase.instance.client);
+    _service = EventService(Supabase.instance.client);
+  }
+
+  Future<_TicketData?> _loadTicket() async {
+    try {
+      final event = await _service.getEventById(widget.eventId);
+      final registration =
+          await _service.getRegistrationById(widget.registrationId);
+
+      if (event == null || registration == null) {
+        return null;
+      }
+
+      return _TicketData(
+        event: event,
+        registration: registration,
+      );
+    } catch (e) {
+      debugPrint('Ticket loading error: $e');
+      return null;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.theme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: FutureBuilder<_TicketBundle?>(
-          future: _load(),
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final bundle = snap.data;
-            if (bundle == null) {
-              return Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const _TicketTopBar(),
-                    const Spacer(),
-                    Text('Billet introuvable.',
-                        style: context.textStyles.titleMedium?.copyWith(
-                            color: context.theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w800)),
-                    const SizedBox(height: AppSpacing.lg),
-                    FilledButton(
-                      onPressed: () =>
-                          context.popOrGo('/events/${widget.eventId}'),
-                      child: const Text('Retour à l’événement'),
-                    ),
-                    const Spacer(),
-                  ],
-                ),
-              );
-            }
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _TicketTopBar(eventId: widget.eventId),
-                  const SizedBox(height: AppSpacing.md),
-                  Text('Billet',
-                      style: context.textStyles.titleLarge?.copyWith(
-                          color: context.theme.colorScheme.onSurface,
-                          fontWeight: FontWeight.w900)),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text('Présente ce code à la porte.',
-                      style: context.textStyles.bodyMedium?.copyWith(
-                          color: LightModeColors.secondaryText, height: 1.5)),
-                  const SizedBox(height: AppSpacing.lg),
-                  _TicketCard(event: bundle.event, reg: bundle.reg),
-                  const SizedBox(height: AppSpacing.lg),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () =>
-                              context.go('/events/${widget.eventId}'),
-                          icon: const Icon(Icons.event_rounded),
-                          label: const Text('Détails'),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text(
-                                      'Billet prêt. Montre le code à l’entrée.')),
-                            );
-                          },
-                          icon: const Icon(Icons.verified_rounded),
-                          label: const Text('Prêt à scanner'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+      backgroundColor: const Color(0xffF8FAFC),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        title: const Text(
+          'Mon billet',
+          style: TextStyle(
+            color: Color(0xff0F172A),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        iconTheme: const IconThemeData(
+          color: Color(0xff0F172A),
+        ),
+      ),
+      body: FutureBuilder<_TicketData?>(
+        future: _loadTicket(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(
+              child: CircularProgressIndicator(),
             );
-          },
+          }
+
+          if (!snapshot.hasData) {
+            return _buildNotFound();
+          }
+
+          final data = snapshot.data!;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                _buildTicketCard(
+                  data.event,
+                  data.registration,
+                ),
+                const SizedBox(height: 24),
+                _buildInstructions(),
+                const SizedBox(height: 20),
+                _buildActions(data),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildNotFound() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.confirmation_number_outlined,
+              size: 80,
+              color: Colors.grey,
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Billet introuvable',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Ce billet n’existe pas ou a été supprimé.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: () => context.pop(),
+              child: const Text('Retour'),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Future<_TicketBundle?> _load() async {
-    try {
-      final event = await _eventService.getEventById(widget.eventId);
-      final reg = await _eventService.getRegistrationById(widget.registrationId);
-      if (event == null || reg == null) return null;
-      if (reg.eventId != event.id) return null;
-      return _TicketBundle(event: event, reg: reg);
-    } catch (e) {
-      debugPrint('EventTicketPage._load failed err=$e');
-      return null;
-    }
-  }
-}
-
-class _TicketTopBar extends StatelessWidget {
-  final String? eventId;
-  const _TicketTopBar({this.eventId});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconButton(
-          onPressed: () => context.popOrGo(
-              eventId == null ? AppRoutes.events : '/events/$eventId'),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
-        ),
-        Expanded(
-          child: Text('THIX Ticket',
-              style: context.textStyles.titleLarge?.copyWith(
-                  color: context.theme.colorScheme.onSurface,
-                  fontWeight: FontWeight.w900)),
-        ),
-      ],
-    );
-  }
-}
-
-class _TicketCard extends StatelessWidget {
-  final EventItem event;
-  final EventRegistration reg;
-  const _TicketCard({required this.event, required this.reg});
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildTicketCard(
+    EventItem event,
+    EventRegistration reg,
+  ) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: context.theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(
-            color: LightModeColors.accent.withValues(alpha: 0.50), width: 1.5),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 12,
+            color: Colors.black.withOpacity(0.05),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.shield_rounded, color: LightModeColors.success),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(event.title,
-                    style: context.textStyles.titleMedium?.copyWith(
-                        color: context.theme.colorScheme.onSurface,
-                        fontWeight: FontWeight.w900)),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text('${_formatDate(event.startsAt)} • ${event.location}', // ✅ startsAt
-              style: context.textStyles.bodyMedium?.copyWith(
-                  color: LightModeColors.secondaryText, height: 1.5)),
-          const SizedBox(height: AppSpacing.lg),
           Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: context.theme.scaffoldBackgroundColor,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(color: context.theme.dividerColor),
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Color(0xff2563EB),
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Row(
               children: [
-                Center(
-                  child: BarcodeWidget(
-                    barcode: Barcode.code128(),
-                    data: reg.ticketCode,
-                    drawText: false,
-                    width: 520,
-                    height: 96,
-                    color: context.theme.colorScheme.onSurface,
-                    errorBuilder: (context, error) => Text(
-                        'Barcode error: $error',
-                        style: context.textStyles.bodySmall?.copyWith(
-                            color: context.theme.colorScheme.error)),
+                const Icon(
+                  Icons.verified,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'THIX TICKET',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.md),
-                SelectableText(
-                  reg.ticketCode,
-                  textAlign: TextAlign.center,
-                  style: context.textStyles.titleSmall?.copyWith(
-                      color: context.theme.colorScheme.onSurface,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    reg.status.toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          _TicketMetaRow(label: 'THIX ID', value: reg.attendeeThixId),
-          const SizedBox(height: AppSpacing.sm),
-          _TicketMetaRow(label: 'Billets', value: reg.tickets.toString()),
-          if (reg.note != null && reg.note!.trim().isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _TicketMetaRow(label: 'Note', value: reg.note!),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                  color: LightModeColors.success.withValues(alpha: 0.12),
-                  border: Border.all(
-                      color: LightModeColors.success.withValues(alpha: 0.35)),
+
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Text(
+                  event.title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle_rounded,
-                        size: 18, color: LightModeColors.success),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text('Valide',
-                        style: context.textStyles.labelLarge?.copyWith(
-                            color: context.theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w800)),
-                  ],
+
+                const SizedBox(height: 16),
+
+                _infoRow(
+                  Icons.calendar_month,
+                  _formatDate(event.startsAt),
                 ),
-              ),
-              const Spacer(),
-              Text('ID: ${reg.id}',
-                  style: context.textStyles.labelSmall
-                      ?.copyWith(color: LightModeColors.secondaryText)),
-            ],
+
+                const SizedBox(height: 10),
+
+                _infoRow(
+                  Icons.location_on,
+                  event.location,
+                ),
+
+                const SizedBox(height: 20),
+
+                BarcodeWidget(
+                  barcode: Barcode.code128(),
+                  data: reg.ticketCode,
+                  drawText: false,
+                  width: 300,
+                  height: 90,
+                ),
+
+                const SizedBox(height: 15),
+
+                SelectableText(
+                  reg.ticketCode,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                const Divider(),
+
+                const SizedBox(height: 10),
+
+                _detailRow(
+                  "THIX ID",
+                  reg.attendeeThixId,
+                ),
+
+                _detailRow(
+                  "Billets",
+                  reg.tickets.toString(),
+                ),
+
+                _detailRow(
+                  "Réservation",
+                  reg.id,
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
-}
 
-class _TicketMetaRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _TicketMetaRow({required this.label, required this.value});
+  Widget _buildInstructions() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xffEFF6FF),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Column(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: Colors.blue,
+          ),
+          SizedBox(height: 10),
+          Text(
+            "Présentez ce billet à l'entrée de l'événement. "
+            "Le code-barres sera scanné pour valider votre accès.",
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildActions(_TicketData data) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 92,
-          child: Text(label,
-              style: context.textStyles.labelLarge?.copyWith(
-                  color: LightModeColors.secondaryText,
-                  fontWeight: FontWeight.w700)),
-        ),
-        const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: SelectableText(value,
-              style: context.textStyles.bodyMedium?.copyWith(
-                  color: context.theme.colorScheme.onSurface, height: 1.4)),
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.event),
+            label: const Text("Événement"),
+            onPressed: () {
+              context.push('/events/${data.event.id}');
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton.icon(
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text("Scanner"),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    "Billet prêt à être scanné",
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ],
     );
   }
+
+  Widget _infoRow(
+    IconData icon,
+    String value,
+  ) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 18,
+          color: Colors.blue,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(value),
+        ),
+      ],
+    );
+  }
+
+  Widget _detailRow(
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: 6,
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return "${date.day}/${date.month}/${date.year} "
+        "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
+  }
 }
 
-class _TicketBundle {
+class _TicketData {
   final EventItem event;
-  final EventRegistration reg;
-  const _TicketBundle({required this.event, required this.reg});
-}
+  final EventRegistration registration;
 
-extension _ThemeX on BuildContext {
-  ThemeData get theme => Theme.of(this);
+  const _TicketData({
+    required this.event,
+    required this.registration,
+  });
 }
