@@ -10,14 +10,102 @@ class NotificationService {
   final SupabaseClient _client;
 
   static const String _table = 'thix_notifications';
-  static const Duration _broadcastPollInterval = Duration(seconds: 8);
-  static const Duration _userPollInterval = Duration(seconds: 3);
+  static const Duration _pollInterval = Duration(seconds: 5);
   static const int _maxNotifications = 50;
 
   // ==========================================================================
-  // STREAMS AVEC POLLING (sans Realtime)
+  // STREAMS SIMPLES (polling uniquement, pas de Realtime)
   // ==========================================================================
 
+  /// Stream des notifications personnelles (polling toutes les 5 secondes)
+  Stream<List<Map<String, dynamic>>> streamForUser(String uid) {
+    final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
+    Timer? pollTimer;
+    bool isActive = true;
+
+    Future<void> fetch() async {
+      if (!isActive) return;
+      try {
+        final response = await _client
+            .from(_table)
+            .select('*')
+            .eq('user_id', uid)
+            .order('created_at', ascending: false)
+            .limit(_maxNotifications);
+
+        final notifications = response is List
+            ? response
+                .map((e) => _normalizeRow(e as Map<String, dynamic>))
+                .toList(growable: false)
+            : <Map<String, dynamic>>[];
+
+        if (!controller.isClosed) controller.add(notifications);
+      } catch (e) {
+        debugPrint('NotificationService: fetch failed uid=$uid err=$e');
+        if (!controller.isClosed) controller.add([]);
+      }
+    }
+
+    controller.onListen = () {
+      isActive = true;
+      unawaited(fetch());
+      pollTimer = Timer.periodic(_pollInterval, (_) => unawaited(fetch()));
+    };
+
+    controller.onCancel = () {
+      isActive = false;
+      pollTimer?.cancel();
+      controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  /// Stream des notifications broadcast (user_id = null)
+  Stream<List<Map<String, dynamic>>> streamBroadcastOnly() {
+    final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
+    Timer? pollTimer;
+    bool isActive = true;
+
+    Future<void> fetch() async {
+      if (!isActive) return;
+      try {
+        final response = await _client
+            .from(_table)
+            .select('*')
+            .is_('user_id', null)
+            .order('created_at', ascending: false)
+            .limit(_maxNotifications);
+
+        final notifications = response is List
+            ? response
+                .map((e) => _normalizeRow(e as Map<String, dynamic>))
+                .toList(growable: false)
+            : <Map<String, dynamic>>[];
+
+        if (!controller.isClosed) controller.add(notifications);
+      } catch (e) {
+        debugPrint('NotificationService: broadcast fetch failed err=$e');
+        if (!controller.isClosed) controller.add([]);
+      }
+    }
+
+    controller.onListen = () {
+      isActive = true;
+      unawaited(fetch());
+      pollTimer = Timer.periodic(_pollInterval, (_) => unawaited(fetch()));
+    };
+
+    controller.onCancel = () {
+      isActive = false;
+      pollTimer?.cancel();
+      controller.close();
+    };
+
+    return controller.stream;
+  }
+
+  /// Stream des notifications personnelles + broadcast (mélangées)
   Stream<List<Map<String, dynamic>>> streamForHome({String? uid}) {
     if (uid == null || uid.trim().isEmpty) {
       return streamBroadcastOnly();
@@ -68,103 +156,10 @@ class NotificationService {
         await broadcastSub?.cancel();
       };
 
-    return controller.stream.distinct((prev, next) {
-      if (prev.length != next.length) return false;
-      for (int i = 0; i < prev.length; i++) {
-        if (prev[i]['id'] != next[i]['id']) return false;
-        if (prev[i]['read'] != next[i]['read']) return false;
-      }
-      return true;
-    });
-  }
-
-  Stream<List<Map<String, dynamic>>> streamBroadcastOnly() {
-    final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
-    Timer? pollTimer;
-    bool isCancelled = false;
-
-    Future<void> fetch() async {
-      if (isCancelled) return;
-      try {
-        final response = await _client
-            .from(_table)
-            .select('*')
-            .filter('user_id', 'is', null)
-            .order('created_at', ascending: false)
-            .limit(_maxNotifications);
-        final notifications = response is List
-            ? response
-                .map((e) => _normalizeRow(e as Map<String, dynamic>))
-                .toList(growable: false)
-            : <Map<String, dynamic>>[];
-
-        if (!controller.isClosed) controller.add(notifications);
-      } catch (e) {
-        debugPrint('NotificationService: broadcast fetch failed err=$e');
-        if (!controller.isClosed) controller.add([]);
-      }
-    }
-
-    controller
-      ..onListen = () {
-        isCancelled = false;
-        unawaited(fetch());
-        pollTimer?.cancel();
-        pollTimer = Timer.periodic(_broadcastPollInterval, (_) => unawaited(fetch()));
-      }
-      ..onCancel = () {
-        isCancelled = true;
-        pollTimer?.cancel();
-      };
-
     return controller.stream;
   }
 
-  Stream<List<Map<String, dynamic>>> streamForUser(String uid) {
-    final authUid = _client.auth.currentUser?.id;
-    final effectiveUid = (authUid != null && authUid != uid) ? authUid : uid;
-
-    final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
-    Timer? pollTimer;
-    bool isCancelled = false;
-
-    Future<void> fetch() async {
-      if (isCancelled) return;
-      try {
-        final response = await _client
-            .from(_table)
-            .select('*')
-            .eq('user_id', effectiveUid)
-            .order('created_at', ascending: false)
-            .limit(_maxNotifications);
-
-        final notifications = response is List
-            ? response
-                .map((e) => _normalizeRow(e as Map<String, dynamic>))
-                .toList(growable: false)
-            : <Map<String, dynamic>>[];
-
-        if (!controller.isClosed) controller.add(notifications);
-      } catch (e) {
-        debugPrint('NotificationService: user fetch failed uid=$effectiveUid err=$e');
-        if (!controller.isClosed) controller.add([]);
-      }
-    }
-
-    controller
-      ..onListen = () {
-        isCancelled = false;
-        unawaited(fetch());
-        pollTimer = Timer.periodic(_userPollInterval, (_) => unawaited(fetch()));
-      }
-      ..onCancel = () {
-        isCancelled = true;
-        pollTimer?.cancel();
-      };
-
-    return controller.stream;
-  }
-
+  /// Stream du nombre de notifications non lues
   Stream<int> streamUnreadCount(String uid) {
     return streamForUser(uid)
         .map((notifications) => notifications.where((n) => n['read'] != true).length)
@@ -193,14 +188,7 @@ class NotificationService {
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
     } catch (e) {
-      debugPrint('NotificationService: add failed, trying legacy schema. err=$e');
-      await _client.from(_table).insert({
-        'user_id': toUid,
-        'title': title,
-        'message': body,
-        'seen': false,
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-      });
+      debugPrint('NotificationService: add failed err=$e');
     }
   }
 
@@ -215,12 +203,7 @@ class NotificationService {
           .eq('id', notificationId)
           .eq('user_id', uid);
     } catch (e) {
-      debugPrint('NotificationService: markRead failed, trying legacy schema. err=$e');
-      await _client
-          .from(_table)
-          .update({'seen': true})
-          .eq('id', notificationId)
-          .eq('user_id', uid);
+      debugPrint('NotificationService: markRead failed err=$e');
     }
   }
 
@@ -232,12 +215,7 @@ class NotificationService {
           .eq('user_id', uid)
           .eq('read', false);
     } catch (e) {
-      debugPrint('NotificationService: markAllRead failed, trying legacy schema. err=$e');
-      await _client
-          .from(_table)
-          .update({'seen': true})
-          .eq('user_id', uid)
-          .eq('seen', false);
+      debugPrint('NotificationService: markAllRead failed err=$e');
     }
   }
 
