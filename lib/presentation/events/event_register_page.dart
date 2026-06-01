@@ -1,325 +1,431 @@
-import 'package:flutter/foundation.dart';
+// ============================================================================
+// FICHIER : lib/presentation/events/event_register_page.dart
+// ============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:thix_id/auth/auth_controller.dart';
-import 'package:thix_id/nav.dart';
-import 'package:thix_id/services/event_service.dart';
-import 'package:thix_id/services/profile_service.dart';
-import 'package:thix_id/services/thix_id_service.dart';
-import 'package:thix_id/theme.dart';
+
+import '../../models/event_item.dart';
+import '../../services/event_service.dart';
 
 class EventRegisterPage extends StatefulWidget {
-  final String eventId;
-  const EventRegisterPage({super.key, required this.eventId});
+  final EventItem event;
+
+  const EventRegisterPage({
+    super.key,
+    required this.event,
+  });
 
   @override
-  State<EventRegisterPage> createState() => _EventRegisterPageState();
+  State<EventRegisterPage> createState() =>
+      _EventRegisterPageState();
 }
 
-class _EventRegisterPageState extends State<EventRegisterPage> {
-  final _eventService = EventService(Supabase.instance.client);
-  final _profileService = ProfileService();
-  final _thixCtrl = TextEditingController();
-  final _noteCtrl = TextEditingController();
-  int _tickets = 1;
+class _EventRegisterPageState
+    extends State<EventRegisterPage> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _thixIdController =
+      TextEditingController();
+
+  final _nameController =
+      TextEditingController();
+
+  final _emailController =
+      TextEditingController();
+
+  final _phoneController =
+      TextEditingController();
+
+  final _noteController =
+      TextEditingController();
+
   bool _loading = false;
-  String? _error;
+
+  int _tickets = 1;
+
+  late EventService _eventService;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _eventService = EventService(
+      Supabase.instance.client,
+    );
+  }
 
   @override
   void dispose() {
-    _thixCtrl.dispose();
-    _noteCtrl.dispose();
+    _thixIdController.dispose();
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final auth = context.read<AuthController>();
-    final thixId = auth.currentUser?.thixId ?? '';
-    if (_thixCtrl.text.trim().isEmpty && thixId.trim().isNotEmpty) {
-      _thixCtrl.text = thixId;
-    }
+  double get _totalPrice {
+    return widget.event.price * _tickets;
   }
 
-  Future<void> _submit() async {
-    FocusScope.of(context).unfocus();
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final user =
+        Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Veuillez vous connecter'),
+        ),
+      );
+      return;
+    }
+
     setState(() {
-      _error = null;
       _loading = true;
     });
 
     try {
-      // 1. Valider le THIX ID
-      final canonical = ThixIdService.canonicalizeOrNull(_thixCtrl.text);
-      if (canonical == null || !ThixIdService.isValid(canonical)) {
-        setState(() => _error = 'THIX ID invalide. Exemple: ${ThixIdService.exampleV2}');
-        return;
-      }
-
-      // 2. Vérifier que le profil existe (optionnel mais recommandé)
-      final profile = await _profileService.fetchPublicProfileByThixId(canonical);
-      if (profile == null) {
-        setState(() => _error = 'Aucun profil trouvé pour ce THIX ID.');
-        return;
-      }
-
-      // 3. Récupérer l'userId du profil (ou de l'auth actuel)
-      final auth = context.read<AuthController>();
-      final userId = auth.currentUser?.id;
-      if (userId == null) {
-        setState(() => _error = 'Vous devez être connecté.');
-        return;
-      }
-
-      // 4. Créer la réservation via createRegistration
-      final registrationData = {
-        'event_id': widget.eventId,
-        'attendee_thix_id': canonical,
-        'ticket_code': 'THIX-${DateTime.now().millisecondsSinceEpoch}',
-        'tickets': _tickets,
-        'note': _noteCtrl.text.trim(),
-        'status': 'valid',
-        'created_at': DateTime.now().toIso8601String(),
-      };
-
-      final ticketCode = await _eventService.createRegistration(
-        registrationData,
-        userId: userId,
+      final success =
+          await _eventService.registerForEvent(
+        userId: user.id,
+        eventId: widget.event.id,
       );
 
-      if (ticketCode.isEmpty) {
-        throw Exception('Création échouée');
-      }
-
-      // 5. Récupérer l'ID de la réservation (le service ne le retourne pas directement,
-      //    mais on peut le retrouver via getTicketByCode)
-      final ticket = await _eventService.getTicketByCode(ticketCode);
-      final registrationId = ticket?['id']?.toString();
-      if (registrationId == null) {
-        throw Exception('Impossible de récupérer le billet');
+      if (!success) {
+        throw Exception(
+          'Vous êtes déjà inscrit.',
+        );
       }
 
       if (!mounted) return;
-      context.go('/events/${widget.eventId}/ticket/$registrationId');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Réservation effectuée avec succès',
+          ),
+        ),
+      );
+
+      context.go('/events');
     } catch (e) {
-      debugPrint('EventRegisterPage.submit failed err=$e');
       if (!mounted) return;
-      setState(() => _error = 'Erreur lors de l’inscription. Réessaie.');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final event = widget.event;
+
     return Scaffold(
-      backgroundColor: context.theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: const Text(
+          'Réservation',
+        ),
+      ),
       body: SafeArea(
-        child: FutureBuilder(
-          future: _eventService.getEventById(widget.eventId), // ✅ corrigé
-          builder: (context, snap) {
-            final event = snap.data;
-            if (snap.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (event == null) {
-              return Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
+        child: SingleChildScrollView(
+          padding:
+              const EdgeInsets.all(20),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color:
+                        Colors.blue.shade50,
+                    borderRadius:
+                        BorderRadius.circular(
+                            16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        event.title,
+                        style:
+                            const TextStyle(
+                          fontSize: 20,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(
+                          height: 8),
+                      Text(
+                        event.location,
+                      ),
+                      const SizedBox(
+                          height: 4),
+                      Text(
+                        event.priceLabel,
+                        style:
+                            const TextStyle(
+                          color: Colors.blue,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 24),
+
+                const Text(
+                  'THIX ID',
+                  style: TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 8),
+
+                TextFormField(
+                  controller:
+                      _thixIdController,
+                  decoration:
+                      const InputDecoration(
+                    border:
+                        OutlineInputBorder(),
+                    hintText:
+                        'Votre THIX ID',
+                  ),
+                  validator: (value) {
+                    if (value == null ||
+                        value.isEmpty) {
+                      return 'Champ obligatoire';
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(
+                    height: 16),
+
+                TextFormField(
+                  controller:
+                      _nameController,
+                  decoration:
+                      const InputDecoration(
+                    border:
+                        OutlineInputBorder(),
+                    labelText:
+                        'Nom complet',
+                  ),
+                  validator: (value) {
+                    if (value == null ||
+                        value.isEmpty) {
+                      return 'Champ obligatoire';
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(
+                    height: 16),
+
+                TextFormField(
+                  controller:
+                      _emailController,
+                  keyboardType:
+                      TextInputType
+                          .emailAddress,
+                  decoration:
+                      const InputDecoration(
+                    border:
+                        OutlineInputBorder(),
+                    labelText:
+                        'Email',
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 16),
+
+                TextFormField(
+                  controller:
+                      _phoneController,
+                  keyboardType:
+                      TextInputType.phone,
+                  decoration:
+                      const InputDecoration(
+                    border:
+                        OutlineInputBorder(),
+                    labelText:
+                        'Téléphone',
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 24),
+
+                const Text(
+                  'Nombre de billets',
+                  style: TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 8),
+
+                Row(
                   children: [
-                    _TopBar(eventId: widget.eventId),
-                    const Spacer(),
-                    Text('Événement introuvable.',
-                        style: context.textStyles.titleMedium
-                            ?.copyWith(color: context.theme.colorScheme.onSurface)),
-                    const SizedBox(height: AppSpacing.lg),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () => context.popOrGo(AppRoutes.events),
-                        child: const Text('Retour'),
+                    IconButton(
+                      onPressed: () {
+                        if (_tickets >
+                            1) {
+                          setState(() {
+                            _tickets--;
+                          });
+                        }
+                      },
+                      icon: const Icon(
+                        Icons.remove_circle,
                       ),
                     ),
-                    const Spacer(),
+                    Text(
+                      _tickets
+                          .toString(),
+                      style:
+                          const TextStyle(
+                        fontSize: 20,
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _tickets++;
+                        });
+                      },
+                      icon: const Icon(
+                        Icons.add_circle,
+                      ),
+                    ),
                   ],
                 ),
-              );
-            }
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _TopBar(eventId: widget.eventId),
-                  const SizedBox(height: AppSpacing.md),
-                  Text('Inscription',
-                      style: context.textStyles.titleLarge?.copyWith(
-                          color: context.theme.colorScheme.onSurface,
-                          fontWeight: FontWeight.w900)),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(event.title,
-                      style: context.textStyles.titleMedium?.copyWith(
-                          color: LightModeColors.secondaryText,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: AppSpacing.lg),
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    decoration: BoxDecoration(
-                      color: context.theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.xl),
-                      border: Border.all(
-                          color: LightModeColors.accent.withValues(alpha: 0.45),
-                          width: 1.5),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.verified_user_rounded,
-                                color: LightModeColors.success),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: Text('THIX ID requis',
-                                  style: context.textStyles.titleSmall
-                                      ?.copyWith(
-                                          color: context
-                                              .theme.colorScheme.onSurface,
-                                          fontWeight: FontWeight.w800)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        TextField(
-                          controller: _thixCtrl,
-                          textCapitalization: TextCapitalization.characters,
-                          decoration: InputDecoration(
-                            labelText: 'THIX ID',
-                            hintText: ThixIdService.exampleV2,
-                            prefixIcon: const Icon(Icons.badge_rounded),
-                          ),
-                          onChanged: (_) {
-                            if (_error != null) setState(() => _error = null);
-                          },
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text('Billets',
-                                  style: context.textStyles.titleSmall
-                                      ?.copyWith(
-                                          color: context
-                                              .theme.colorScheme.onSurface,
-                                          fontWeight: FontWeight.w800)),
-                            ),
-                            IconButton(
-                              onPressed: _loading || _tickets <= 1
-                                  ? null
-                                  : () => setState(() => _tickets -= 1),
-                              icon: const Icon(Icons.remove_circle_outline_rounded),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.md,
-                                  vertical: AppSpacing.sm),
-                              decoration: BoxDecoration(
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.full),
-                                border: Border.all(
-                                    color: context.theme.dividerColor),
-                                color: context.theme.scaffoldBackgroundColor,
-                              ),
-                              child: Text('$_tickets',
-                                  style: context.textStyles.titleSmall
-                                      ?.copyWith(
-                                          color: context
-                                              .theme.colorScheme.onSurface,
-                                          fontWeight: FontWeight.w900)),
-                            ),
-                            IconButton(
-                              onPressed: _loading
-                                  ? null
-                                  : () => setState(() => _tickets += 1),
-                              icon: const Icon(Icons.add_circle_outline_rounded),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        TextField(
-                          controller: _noteCtrl,
-                          minLines: 2,
-                          maxLines: 5,
-                          decoration: const InputDecoration(
-                            labelText: 'Note (optionnel)',
-                            hintText: 'Allergies, besoins spécifiques, entreprise…',
-                            prefixIcon: Icon(Icons.edit_note_rounded),
-                          ),
-                        ),
-                        if (_error != null) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          Text(_error!,
-                              style: context.textStyles.bodyMedium?.copyWith(
-                                  color: context.theme.colorScheme.error,
-                                  fontWeight: FontWeight.w700)),
-                        ],
-                        const SizedBox(height: AppSpacing.lg),
-                        SizedBox(
-                          height: 52,
-                          child: FilledButton.icon(
-                            onPressed: _loading ? null : _submit,
-                            icon: _loading
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2))
-                                : const Icon(Icons.lock_open_rounded),
-                            label: Text(_loading
-                                ? 'Validation…'
-                                : 'Confirmer mon inscription'),
-                          ),
-                        ),
-                      ],
-                    ),
+                const SizedBox(
+                    height: 24),
+
+                TextFormField(
+                  controller:
+                      _noteController,
+                  maxLines: 3,
+                  decoration:
+                      const InputDecoration(
+                    border:
+                        OutlineInputBorder(),
+                    labelText:
+                        'Note (optionnelle)',
                   ),
-                ],
-              ),
-            );
-          },
+                ),
+
+                const SizedBox(
+                    height: 24),
+
+                Container(
+                  padding:
+                      const EdgeInsets.all(
+                          16),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color:
+                          Colors.grey.shade300,
+                    ),
+                    borderRadius:
+                        BorderRadius.circular(
+                            12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment
+                            .spaceBetween,
+                    children: [
+                      const Text(
+                        'Montant total',
+                        style:
+                            TextStyle(
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '${_totalPrice.toStringAsFixed(2)} USD',
+                        style:
+                            const TextStyle(
+                          fontSize: 18,
+                          fontWeight:
+                              FontWeight.bold,
+                          color:
+                              Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 32),
+
+                SizedBox(
+                  width:
+                      double.infinity,
+                  height: 55,
+                  child:
+                      ElevatedButton(
+                    onPressed:
+                        _loading
+                            ? null
+                            : _register,
+                    child: _loading
+                        ? const CircularProgressIndicator()
+                        : const Text(
+                            'Confirmer la réservation',
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
-}
-
-class _TopBar extends StatelessWidget {
-  final String eventId;
-  const _TopBar({required this.eventId});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconButton(
-          onPressed: () => context.popOrGo('/events/$eventId'),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
-        ),
-        Expanded(
-          child: Text('THIX Register',
-              style: context.textStyles.titleLarge?.copyWith(
-                  color: context.theme.colorScheme.onSurface,
-                  fontWeight: FontWeight.w900)),
-        ),
-      ],
-    );
-  }
-}
-
-extension _ThemeX on BuildContext {
-  ThemeData get theme => Theme.of(this);
 }
