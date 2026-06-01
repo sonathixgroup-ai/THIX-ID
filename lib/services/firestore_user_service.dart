@@ -23,10 +23,7 @@ class FirestoreUserService {
     return uid;
   }
 
-  // ==========================================================================
-  // MÉTHODES DE CONVERSION
-  // ==========================================================================
-
+  /// Convertit une ligne de la table profiles en objet AppUser
   AppUser _appUserFromProfileRow(Map<String, dynamic> row) {
     DateTime dt(Object? v) {
       if (v is DateTime) return v;
@@ -87,10 +84,6 @@ class FirestoreUserService {
     );
   }
 
-  // ==========================================================================
-  // MÉTHODES DE LECTURE
-  // ==========================================================================
-
   Future<AppUser?> fetchUserByUid(String uid) async {
     try {
       final row = await _client.from(_table).select('*').eq('id', uid).maybeSingle();
@@ -102,140 +95,60 @@ class FirestoreUserService {
     }
   }
 
-  Future<AppUser?> fetchUserByThixId(String thixId) async {
-    final normalized = thixId.trim().toUpperCase();
-    if (normalized.isEmpty) return null;
-    try {
-      final row = await _client.from(_table).select('*').eq('thix_id', normalized).maybeSingle();
-      if (row == null) return null;
-      return _appUserFromProfileRow((row as Map).cast<String, dynamic>());
-    } catch (e) {
-      debugPrint('Erreur fetchUserByThixId: $e');
-      return null;
-    }
-  }
-
-  Future<List<AppUser>> searchUsers(String query, {int limit = 12, String? excludeUid}) async {
-    final q = query.trim();
-    if (q.isEmpty) return const <AppUser>[];
-    try {
-      final like = '%$q%';
-      final rows = await _client
-          .from(_table)
-          .select('id, display_name, thix_id, thix_chat, avatar_url')
-          .or('display_name.ilike.$like,thix_id.ilike.$like,thix_chat.ilike.$like')
-          .limit(limit);
-      if (rows is! List) return const [];
-      final list = rows.whereType<Map>().map((m) => _appUserFromProfileRow(m.cast<String, dynamic>())).toList(growable: false);
-      if (excludeUid == null || excludeUid.trim().isEmpty) return list;
-      final ex = excludeUid.trim();
-      return list.where((u) => u.id != ex).toList(growable: false);
-    } catch (e) {
-      debugPrint('Erreur searchUsers: $e');
-      return const [];
-    }
-  }
-
-  // ==========================================================================
-  // MÉTHODES POUR LE DASHBOARD (addPaymentTransaction, streamPayments, logSecurityEvent, streamSecurityEvents)
-  // ==========================================================================
-
-  Future<void> addPaymentTransaction({
-    required String uid,
-    required String title,
-    required num amount,
-    String currency = 'USD',
-    String method = 'Simulé',
-    String status = 'paid',
-    String? transactionRef,
-    Map<String, dynamic>? meta,
-  }) async {
-    try {
-      final txRef = transactionRef ?? 'tx_${DateTime.now().millisecondsSinceEpoch}_${uid.substring(0, uid.length >= 6 ? 6 : uid.length)}';
-      await _client.from('thix_payments').insert({
-        'user_id': uid,
-        'tx_ref': txRef,
-        'method': '$method • $title',
-        'amount': amount,
-        'currency': currency,
-        'status': status,
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-      });
-      if (meta != null && meta.isNotEmpty) {
-        try {
-          await _client.from('thix_payment_meta').insert({
-            'user_id': uid,
-            'tx_ref': txRef,
-            'meta': meta,
-            'created_at': DateTime.now().toUtc().toIso8601String(),
-          });
-        } catch (_) {}
-      }
-    } catch (e) {
-      debugPrint('FirestoreUserService: addPaymentTransaction failed uid=$uid err=$e');
-    }
-  }
-
-  Stream<List<Map<String, dynamic>>> streamPayments(String uid) async* {
-    while (true) {
-      try {
-        final rows = await _client.from('thix_payments').select('*').eq('user_id', uid).order('created_at', ascending: false).limit(50);
-        if (rows is List) {
-          yield rows.map((e) => (e as Map).cast<String, dynamic>()).toList(growable: false);
-        } else {
-          yield const <Map<String, dynamic>>[];
-        }
-      } catch (e) {
-        debugPrint('FirestoreUserService: streamPayments failed uid=$uid err=$e');
-        yield const <Map<String, dynamic>>[];
-      }
-      await Future<void>.delayed(const Duration(seconds: 3));
-    }
-  }
-
-  Future<void> logSecurityEvent({
-    required String uid,
-    required String type,
-    String? label,
-    Map<String, dynamic>? meta,
-  }) async {
-    try {
-      await _client.from('thix_security_events').insert({
-        'user_id': uid,
-        'type': type,
-        'label': label,
-        'meta': meta ?? const <String, dynamic>{},
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-      });
-    } catch (e) {
-      debugPrint('FirestoreUserService: logSecurityEvent failed uid=$uid err=$e');
-    }
-  }
-
-  Stream<List<Map<String, dynamic>>> streamSecurityEvents(String uid) async* {
-    while (true) {
-      try {
-        final rows = await _client.from('thix_security_events').select('*').eq('user_id', uid).order('created_at', ascending: false).limit(40);
-        if (rows is List) {
-          yield rows.map((e) => (e as Map).cast<String, dynamic>()).toList(growable: false);
-        } else {
-          yield const <Map<String, dynamic>>[];
-        }
-      } catch (e) {
-        debugPrint('FirestoreUserService: streamSecurityEvents failed uid=$uid err=$e');
-        yield const <Map<String, dynamic>>[];
-      }
-      await Future<void>.delayed(const Duration(seconds: 4));
-    }
-  }
-
-  // ==========================================================================
-  // MÉTHODES DE MISE À JOUR
-  // ==========================================================================
-
+  /// Met à jour le profil utilisateur avec tous les champs possibles
   Future<void> updateProfile({
     required String uid,
+    // Informations personnelles
+    String? fullName,
     String? displayName,
+    String? countryOrOrigin,
+    String? contactPhone,
+    String? dateOfBirth,
+    String? placeOfBirth,
+    String? nationality,
+    String? maritalStatus,
+    String? gender,
+    String? occupation,
+    String? address,
+    String? fatherName,
+    String? motherName,
+    // Contacts d'urgence
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    String? emergencyContactRelation,
+    List<Map<String, dynamic>>? emergencyContacts,
+    // Origine et résidence
+    String? originProvince,
+    String? originTerritory,
+    String? originSector,
+    String? residenceCountry,
+    String? residenceProvince,
+    String? residenceTerritory,
+    String? residenceCity,
+    String? residenceCommune,
+    String? residenceQuarter,
+    String? residenceAvenue,
+    String? residenceNumber,
+    // Informations physiques
+    String? height,
+    String? weight,
+    String? bloodGroup,
+    bool? hasPhysicalDisability,
+    String? physicalDisabilityDescription,
+    // Documents d'identité
+    String? nationalIdNumber,
+    String? idDocumentType,
+    String? idDocumentIssueDate,
+    String? idDocumentExpiryDate,
+    String? idDocumentIssuePlace,
+    // Parcours
+    String? bio,
+    String? competence,
+    List<Map<String, dynamic>>? education,
+    List<Map<String, dynamic>>? experience,
+    // Statut
+    String? registrationStatus,
+    String? photoUrl,
     String? thixChat,
   }) async {
     final sessionUid = _requireAuthedUid();
@@ -243,12 +156,69 @@ class FirestoreUserService {
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
     
+    // Informations personnelles
+    if (fullName != null) patch['full_name'] = fullName;
     if (displayName != null) patch['display_name'] = displayName;
+    if (countryOrOrigin != null) patch['country_or_origin'] = countryOrOrigin;
+    if (contactPhone != null) patch['contact_phone'] = contactPhone;
+    if (dateOfBirth != null) patch['date_of_birth'] = dateOfBirth;
+    if (placeOfBirth != null) patch['place_of_birth'] = placeOfBirth;
+    if (nationality != null) patch['nationality'] = nationality;
+    if (maritalStatus != null) patch['marital_status'] = maritalStatus;
+    if (gender != null) patch['gender'] = gender;
+    if (occupation != null) patch['occupation'] = occupation;
+    if (address != null) patch['address'] = address;
+    if (fatherName != null) patch['father_name'] = fatherName;
+    if (motherName != null) patch['mother_name'] = motherName;
+    
+    // Contacts d'urgence
+    if (emergencyContactName != null) patch['emergency_contact_name'] = emergencyContactName;
+    if (emergencyContactPhone != null) patch['emergency_contact_phone'] = emergencyContactPhone;
+    if (emergencyContactRelation != null) patch['emergency_contact_relation'] = emergencyContactRelation;
+    if (emergencyContacts != null) patch['emergency_contacts'] = emergencyContacts;
+    
+    // Origine et résidence
+    if (originProvince != null) patch['origin_province'] = originProvince;
+    if (originTerritory != null) patch['origin_territory'] = originTerritory;
+    if (originSector != null) patch['origin_sector'] = originSector;
+    if (residenceCountry != null) patch['residence_country'] = residenceCountry;
+    if (residenceProvince != null) patch['residence_province'] = residenceProvince;
+    if (residenceTerritory != null) patch['residence_territory'] = residenceTerritory;
+    if (residenceCity != null) patch['residence_city'] = residenceCity;
+    if (residenceCommune != null) patch['residence_commune'] = residenceCommune;
+    if (residenceQuarter != null) patch['residence_quarter'] = residenceQuarter;
+    if (residenceAvenue != null) patch['residence_avenue'] = residenceAvenue;
+    if (residenceNumber != null) patch['residence_number'] = residenceNumber;
+    
+    // Informations physiques
+    if (height != null) patch['height'] = height;
+    if (weight != null) patch['weight'] = weight;
+    if (bloodGroup != null) patch['blood_group'] = bloodGroup;
+    if (hasPhysicalDisability != null) patch['has_physical_disability'] = hasPhysicalDisability;
+    if (physicalDisabilityDescription != null) patch['physical_disability_description'] = physicalDisabilityDescription;
+    
+    // Documents d'identité
+    if (nationalIdNumber != null) patch['national_id_number'] = nationalIdNumber;
+    if (idDocumentType != null) patch['id_document_type'] = idDocumentType;
+    if (idDocumentIssueDate != null) patch['id_document_issue_date'] = idDocumentIssueDate;
+    if (idDocumentExpiryDate != null) patch['id_document_expiry_date'] = idDocumentExpiryDate;
+    if (idDocumentIssuePlace != null) patch['id_document_issue_place'] = idDocumentIssuePlace;
+    
+    // Parcours
+    if (bio != null) patch['bio'] = bio;
+    if (competence != null) patch['competence'] = competence;
+    if (education != null) patch['education'] = education;
+    if (experience != null) patch['experience'] = experience;
+    
+    // Statut
+    if (registrationStatus != null) patch['registration_status'] = registrationStatus;
+    if (photoUrl != null) patch['photo_url'] = photoUrl;
     if (thixChat != null) patch['thix_chat'] = thixChat;
 
     await _client.from(_table).update(patch).eq('id', sessionUid);
   }
 
+  /// Génère ou récupère le THIX ID unique de l'utilisateur
   Future<String> ensureThixId({required String uid}) async {
     final sessionUid = _requireAuthedUid();
     final row = await _client.from(_table).select('thix_id').eq('id', sessionUid).maybeSingle();
@@ -261,15 +231,45 @@ class FirestoreUserService {
     return candidate;
   }
 
+  /// Alias de ensureThixId pour compatibilité
   Future<String> assignRealThixIdIfMissing({required String uid}) async {
-    final sessionUid = _requireAuthedUid();
-    final row = await _client.from(_table).select('thix_id').eq('id', sessionUid).maybeSingle();
-    final existing = (row?['thix_id'] ?? '').toString().trim();
-    
-    if (existing.isNotEmpty && existing != 'THIX-PENDING') return existing;
+    return ensureThixId(uid: uid);
+  }
 
-    final candidate = ThixIdService.generate();
-    await _client.from(_table).update({'thix_id': candidate}).eq('id', sessionUid);
-    return candidate;
+  /// Valide, vérifie l'unicité et assigne un THIX CHAT à l'utilisateur
+  Future<String> ensureThixChat({
+    required String uid,
+    required String desired,
+  }) async {
+    final sessionUid = _requireAuthedUid();
+    
+    // Vérifier si déjà assigné
+    final row = await _client.from(_table).select('thix_chat').eq('id', sessionUid).maybeSingle();
+    final existing = (row?['thix_chat'] ?? '').toString().trim();
+    if (existing.isNotEmpty) return existing;
+    
+    // Valider le format
+    final sanitized = desired.trim();
+    if (sanitized.isEmpty) {
+      throw Exception('THIX CHAT ne peut pas être vide.');
+    }
+    
+    // Format: @nom (3-20 caractères alphanumériques, point ou underscore)
+    if (!RegExp(r'^@[a-zA-Z0-9._]{3,20}$').hasMatch(sanitized)) {
+      throw Exception('THIX CHAT invalide. Format: @suivi de 3 à 20 caractères (lettres, chiffres, . ou _)');
+    }
+    
+    // Convertir en minuscules pour l'unicité
+    final normalized = sanitized.toLowerCase();
+    
+    // Vérifier l'unicité
+    final existingChat = await _client.from(_table).select('id').eq('thix_chat', normalized).maybeSingle();
+    if (existingChat != null) {
+      throw Exception('THIX CHAT déjà utilisé. Choisissez un autre identifiant.');
+    }
+    
+    // Assigner le THIX CHAT
+    await _client.from(_table).update({'thix_chat': normalized}).eq('id', sessionUid);
+    return normalized;
   }
 }
