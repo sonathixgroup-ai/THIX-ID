@@ -1,39 +1,42 @@
-// ============================================================================
-// FICHIER: lib/services/event_service.dart
-// ============================================================================
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:thix_id/models/event_item.dart';
-import 'package:thix_id/models/event_registration.dart';
+import 'package:uuid/uuid.dart';
+
+import '../models/event_item.dart';
+import '../models/event_registration.dart';
 
 class EventService {
   final SupabaseClient _supabase;
 
   EventService(this._supabase);
 
-  // ==========================================================================
-  // ÉVÉNEMENTS
-  // ==========================================================================
+  // ===========================================================================
+  // EVENTS
+  // ===========================================================================
 
-  Future<List<EventItem>> getRecommendedEvents({int limit = 4}) async {
+  Future<List<EventItem>> getRecommendedEvents({
+    int limit = 4,
+  }) async {
     try {
       final response = await _supabase
           .from('events')
           .select()
           .eq('is_recommended', true)
-          .order('event_date', ascending: true)
+          .order('event_date')
           .limit(limit);
 
       return (response as List)
-          .map((json) => EventItem.fromJson(json))
+          .map((e) => EventItem.fromJson(e))
           .toList();
     } catch (e) {
-      debugPrint('Erreur getRecommendedEvents: $e');
+      debugPrint('getRecommendedEvents error: $e');
       return [];
     }
   }
 
-  Future<List<EventItem>> getUpcomingEvents({int limit = 10}) async {
+  Future<List<EventItem>> getUpcomingEvents({
+    int limit = 10,
+  }) async {
     try {
       final now = DateTime.now().toIso8601String();
 
@@ -41,14 +44,14 @@ class EventService {
           .from('events')
           .select()
           .gt('event_date', now)
-          .order('event_date', ascending: true)
+          .order('event_date')
           .limit(limit);
 
       return (response as List)
-          .map((json) => EventItem.fromJson(json))
+          .map((e) => EventItem.fromJson(e))
           .toList();
     } catch (e) {
-      debugPrint('Erreur getUpcomingEvents: $e');
+      debugPrint('getUpcomingEvents error: $e');
       return [];
     }
   }
@@ -66,22 +69,27 @@ class EventService {
       }
 
       if (search != null && search.isNotEmpty) {
-        query = query.ilike('title', '%$search%');
+        query = query.ilike(
+          'title',
+          '%$search%',
+        );
       }
 
       final response =
-          await query.order('event_date', ascending: true);
+          await query.order('event_date');
 
       return (response as List)
-          .map((json) => EventItem.fromJson(json))
+          .map((e) => EventItem.fromJson(e))
           .toList();
     } catch (e) {
-      debugPrint('Erreur getAllEvents: $e');
+      debugPrint('getAllEvents error: $e');
       return [];
     }
   }
 
-  Future<EventItem?> getEventById(String eventId) async {
+  Future<EventItem?> getEventById(
+    String eventId,
+  ) async {
     try {
       final response = await _supabase
           .from('events')
@@ -89,73 +97,140 @@ class EventService {
           .eq('id', eventId)
           .maybeSingle();
 
-      if (response == null) return null;
+      if (response == null) {
+        return null;
+      }
 
       return EventItem.fromJson(response);
     } catch (e) {
-      debugPrint('Erreur getEventById: $e');
+      debugPrint('getEventById error: $e');
       return null;
+    }
+  }
+
+  Future<List<EventItem>> getEventsByIds(
+    List<String> ids,
+  ) async {
+    try {
+      if (ids.isEmpty) return [];
+
+      final response = await _supabase
+          .from('events')
+          .select()
+          .inFilter('id', ids);
+
+      return (response as List)
+          .map((e) => EventItem.fromJson(e))
+          .toList();
+    } catch (e) {
+      debugPrint('getEventsByIds error: $e');
+      return [];
     }
   }
 
   Future<List<String>> getPopularCategories() async {
     try {
-      final List response = await _supabase
+      final response = await _supabase
           .from('events')
-          .select('category')
-          .limit(100);
+          .select('category');
 
       final Map<String, int> counts = {};
 
       for (final item in response) {
-        final category = item['category']?.toString();
+        final category =
+            item['category']?.toString();
 
-        if (category != null && category.isNotEmpty) {
-          counts[category] = (counts[category] ?? 0) + 1;
+        if (category == null ||
+            category.isEmpty) {
+          continue;
         }
+
+        counts[category] =
+            (counts[category] ?? 0) + 1;
       }
 
-      final sorted = counts.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
+      final sorted =
+          counts.entries.toList()
+            ..sort(
+              (a, b) =>
+                  b.value.compareTo(a.value),
+            );
 
-      return sorted.take(5).map((e) => e.key).toList();
+      return sorted
+          .take(5)
+          .map((e) => e.key)
+          .toList();
     } catch (e) {
-      debugPrint('Erreur getPopularCategories: $e');
+      debugPrint(
+        'getPopularCategories error: $e',
+      );
 
-      return [
-        'Musique & Concerts',
-        'Conférences & Séminaires',
-        'Culture & Art',
-        'Sport & Loisirs',
-        'Festivals & Soirées',
-      ];
+      return [];
     }
   }
 
-  // ==========================================================================
-  // RÉSERVATIONS
-  // ==========================================================================
+  // ===========================================================================
+  // STORAGE
+  // ===========================================================================
 
-  Future<List<EventRegistration>> getUserRegistrations(
-      String userId) async {
+  String? getEventCoverUrl(
+    EventItem event,
+  ) {
+    try {
+      if (event.coverImageBucket ==
+              null ||
+          event.coverImagePath == null) {
+        return null;
+      }
+
+      return _supabase.storage
+          .from(event.coverImageBucket!)
+          .getPublicUrl(
+            event.coverImagePath!,
+          );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ===========================================================================
+  // TICKETS
+  // ===========================================================================
+
+  Future<List<EventRegistration>>
+      getUserRegistrations(
+    String userId,
+  ) async {
     try {
       final response = await _supabase
           .from('thix_event_tickets')
           .select()
           .eq('user_id', userId)
-          .order('created_at', ascending: false);
+          .order(
+            'created_at',
+            ascending: false,
+          );
 
       return (response as List)
-          .map((json) => EventRegistration.fromJson(json))
+          .map(
+            (e) =>
+                EventRegistration.fromJson(
+              e,
+            ),
+          )
           .toList();
     } catch (e) {
-      debugPrint('Erreur getUserRegistrations: $e');
+      debugPrint(
+        'getUserRegistrations error: $e',
+      );
       return [];
     }
   }
 
-  Future<EventRegistration?> getRegistrationById(
-      String registrationId) async {
+  Future<EventRegistration?>
+      getRegistrationById(
+    String registrationId,
+  ) async {
     try {
       final response = await _supabase
           .from('thix_event_tickets')
@@ -167,60 +242,21 @@ class EventService {
         return null;
       }
 
-      return EventRegistration.fromJson(response);
+      return EventRegistration.fromJson(
+        response,
+      );
     } catch (e) {
-      debugPrint('Erreur getRegistrationById: $e');
+      debugPrint(
+        'getRegistrationById error: $e',
+      );
       return null;
     }
   }
 
-  Future<String> createRegistration(
-    Map<String, dynamic> registrationData, {
+  Future<bool> hasUserTicket({
     required String userId,
+    required String eventId,
   }) async {
-    try {
-      final data = {
-        ...registrationData,
-        'user_id': userId,
-        'status': 'valid',
-        'created_at': DateTime.now().toIso8601String(),
-      };
-
-      final response = await _supabase
-          .from('thix_event_tickets')
-          .insert(data)
-          .select('ticket_code')
-          .single();
-
-      return response['ticket_code']?.toString() ?? '';
-    } catch (e) {
-      debugPrint('Erreur createRegistration: $e');
-      throw Exception(
-        'Impossible de créer la réservation',
-      );
-    }
-  }
-
-  Future<void> cancelRegistration(
-      String registrationId) async {
-    try {
-      await _supabase
-          .from('thix_event_tickets')
-          .update({
-        'status': 'cancelled',
-      }).eq('id', registrationId);
-    } catch (e) {
-      debugPrint('Erreur cancelRegistration: $e');
-      throw Exception(
-        'Impossible d\'annuler la réservation',
-      );
-    }
-  }
-
-  Future<bool> hasUserTicket(
-    String userId,
-    String eventId,
-  ) async {
     try {
       final response = await _supabase
           .from('thix_event_tickets')
@@ -232,69 +268,131 @@ class EventService {
 
       return response != null;
     } catch (e) {
-      debugPrint('Erreur hasUserTicket: $e');
+      debugPrint(
+        'hasUserTicket error: $e',
+      );
       return false;
     }
   }
 
-  Future<bool> registerForEvent({
+  Future<String> createRegistration({
     required String userId,
     required String eventId,
+    required String attendeeThixId,
+    int tickets = 1,
+    String? note,
   }) async {
     try {
-      final alreadyRegistered = await hasUserTicket(
-        userId,
-        eventId,
+      final alreadyRegistered =
+          await hasUserTicket(
+        userId: userId,
+        eventId: eventId,
       );
 
       if (alreadyRegistered) {
-        return false;
+        throw Exception(
+          'Billet déjà existant',
+        );
       }
 
       final ticketCode =
-          'THIX-${DateTime.now().millisecondsSinceEpoch}';
+          'THIX-${const Uuid().v4()}';
 
       await _supabase
           .from('thix_event_tickets')
           .insert({
         'user_id': userId,
         'event_id': eventId,
+        'attendee_thix_id':
+            attendeeThixId,
         'ticket_code': ticketCode,
+        'tickets': tickets,
+        'note': note,
         'status': 'valid',
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at':
+            DateTime.now()
+                .toIso8601String(),
       });
 
-      return true;
+      return ticketCode;
     } catch (e) {
-      debugPrint('Erreur registerForEvent: $e');
-      return false;
+      debugPrint(
+        'createRegistration error: $e',
+      );
+      rethrow;
     }
   }
 
-  Future<Map<String, dynamic>?> getTicketByCode(
-      String ticketCode) async {
+  Future<void> cancelRegistration(
+    String registrationId,
+  ) async {
     try {
-      final response = await _supabase
+      await _supabase
+          .from('thix_event_tickets')
+          .update({
+        'status': 'cancelled',
+      }).eq('id', registrationId);
+    } catch (e) {
+      debugPrint(
+        'cancelRegistration error: $e',
+      );
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>?>
+      getTicketByCode(
+    String ticketCode,
+  ) async {
+    try {
+      return await _supabase
           .from('thix_event_tickets')
           .select()
-          .eq('ticket_code', ticketCode)
+          .eq(
+            'ticket_code',
+            ticketCode,
+          )
           .maybeSingle();
-
-      return response;
     } catch (e) {
-      debugPrint('Erreur getTicketByCode: $e');
+      debugPrint(
+        'getTicketByCode error: $e',
+      );
       return null;
     }
   }
 
-  // ==========================================================================
-  // CODES PROMO
-  // ==========================================================================
+  // ===========================================================================
+  // QR VALIDATION
+  // ===========================================================================
 
-  Future<double?> validatePromoCode(
-    String code,
-    String eventId,
+  Future<bool> validateTicket(
+    String ticketCode,
   ) async {
+    try {
+      final ticket =
+          await getTicketByCode(
+        ticketCode,
+      );
+
+      if (ticket == null) {
+        return false;
+      }
+
+      return ticket['status'] ==
+          'valid';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ===========================================================================
+  // PROMO CODES
+  // ===========================================================================
+
+  Future<double?> validatePromoCode({
+    required String code,
+    required String eventId,
+  }) async {
     try {
       final response = await _supabase
           .from('promo_codes')
@@ -308,22 +406,31 @@ class EventService {
         return null;
       }
 
-      final validUntil = DateTime.tryParse(
-        response['valid_until']?.toString() ?? '',
+      final expiry =
+          DateTime.tryParse(
+        response['valid_until']
+                ?.toString() ??
+            '',
       );
 
-      if (validUntil == null) {
+      if (expiry == null) {
         return null;
       }
 
-      if (validUntil.isBefore(DateTime.now())) {
+      if (expiry.isBefore(
+        DateTime.now(),
+      )) {
         return null;
       }
 
-      return (response['discount_percent'] as num)
+      return (response[
+                  'discount_percent']
+              as num)
           .toDouble();
     } catch (e) {
-      debugPrint('Erreur validatePromoCode: $e');
+      debugPrint(
+        'validatePromoCode error: $e',
+      );
       return null;
     }
   }
