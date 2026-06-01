@@ -13,8 +13,6 @@ class EmergencyActionSheets {
   static Color _sheetBarrierColor(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    // IMPORTANT: keep the underlying Emergency overlay from “bleeding through”.
-    // We want a fully opaque barrier so the form never looks transparent.
     return isDark ? DarkModeColors.background : Colors.white;
   }
 
@@ -99,7 +97,6 @@ class EmergencyActionSheets {
   }
 
   static Future<void> launchMaps(BuildContext context, {required double lat, required double lng}) async {
-    // Google Maps works broadly across platforms; if not installed it opens browser.
     final uri = Uri.parse('https://www.google.com/maps?q=$lat,$lng');
     try {
       if (await canLaunchUrl(uri)) {
@@ -114,17 +111,14 @@ class EmergencyActionSheets {
 }
 
 class EmergencyBloodPayload {
-  final String intent; // donate|request
+  final String intent;
   final String bloodGroup;
-  final double urgency01; // 0..1 (stable -> critical)
-
-  // Identity / medical contact
+  final double urgency01;
   final String? requesterName;
   final String? doctorName;
   final String? doctorQualification;
   final String? doctorId;
   final String? contact;
-
   final String? hospitalOrPlace;
   final double? lat;
   final double? lng;
@@ -203,7 +197,6 @@ class _SheetFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    // Default: premium gold sheet. Medical sheets use a clean clinic background.
     final gold = isDark ? DarkModeColors.metalGold : LightModeColors.metalGold;
     final goldSoft = isDark ? DarkModeColors.metalGoldSoft : LightModeColors.metalGoldSoft;
     final surface = theme.colorScheme.surface;
@@ -284,11 +277,9 @@ class _UrgencyTrackShape extends SliderTrackShape {
     final full = RRect.fromRectAndRadius(rect, r);
     final paint = Paint()..style = PaintingStyle.fill;
 
-    // Background track
     paint.color = EmergencyMedicalSheetColors.stroke;
     canvas.drawRRect(full, paint);
 
-    // Colored segments (Stable / Moderate / Urgent / Critical)
     final segs = [
       const _Seg(0.0, 0.40, EmergencyUrgencyScaleColors.stable),
       const _Seg(0.40, 0.65, EmergencyUrgencyScaleColors.moderate),
@@ -303,7 +294,6 @@ class _UrgencyTrackShape extends SliderTrackShape {
       canvas.drawRRect(rr, paint);
     }
 
-    // Tick dots (for discrete feel)
     const steps = 10;
     final dotPaint = Paint()..style = PaintingStyle.fill;
     final dotR = rect.height * 0.18;
@@ -315,7 +305,6 @@ class _UrgencyTrackShape extends SliderTrackShape {
       canvas.drawCircle(Offset(x, y), dotR, dotPaint);
     }
 
-    // Current value highlight up to thumb
     final leftToThumb = Rect.fromLTRB(rect.left, rect.top, thumbCenter.dx, rect.bottom);
     final highlight = RRect.fromRectAndRadius(leftToThumb, r);
     paint.color = sliderTheme.activeTrackColor ?? EmergencyMedicalSheetColors.medicalBlue;
@@ -512,49 +501,19 @@ class _BloodSheetState extends State<_BloodSheet> {
                     ),
                     if (isRequest) ...[
                       const SizedBox(height: AppSpacing.md),
-                      TextField(
-                        controller: _requesterName,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(labelText: 'Nom du demandeur'),
-                        onChanged: (_) => setState(() {}),
-                      ),
+                      TextField(controller: _requesterName, textInputAction: TextInputAction.next, decoration: const InputDecoration(labelText: 'Nom du demandeur'), onChanged: (_) => setState(() {})),
                       const SizedBox(height: AppSpacing.sm),
-                      TextField(
-                        controller: _contact,
-                        textInputAction: TextInputAction.next,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(labelText: 'Contact (téléphone / WhatsApp)'),
-                        onChanged: (_) => setState(() {}),
-                      ),
+                      TextField(controller: _contact, textInputAction: TextInputAction.next, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Contact (téléphone / WhatsApp)'), onChanged: (_) => setState(() {})),
                       const SizedBox(height: AppSpacing.md),
                       Row(
                         children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _doctorName,
-                              textInputAction: TextInputAction.next,
-                              decoration: const InputDecoration(labelText: 'Nom du médecin'),
-                              onChanged: (_) => setState(() {}),
-                            ),
-                          ),
+                          Expanded(child: TextField(controller: _doctorName, textInputAction: TextInputAction.next, decoration: const InputDecoration(labelText: 'Nom du médecin'), onChanged: (_) => setState(() {}))),
                           const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: TextField(
-                              controller: _doctorQualification,
-                              textInputAction: TextInputAction.next,
-                              decoration: const InputDecoration(labelText: 'Qualification'),
-                              onChanged: (_) => setState(() {}),
-                            ),
-                          ),
+                          Expanded(child: TextField(controller: _doctorQualification, textInputAction: TextInputAction.next, decoration: const InputDecoration(labelText: 'Qualification'), onChanged: (_) => setState(() {}))),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      TextField(
-                        controller: _doctorId,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(labelText: 'ID / Matricule du médecin'),
-                        onChanged: (_) => setState(() {}),
-                      ),
+                      TextField(controller: _doctorId, textInputAction: TextInputAction.next, decoration: const InputDecoration(labelText: 'ID / Matricule du médecin'), onChanged: (_) => setState(() {})),
                       const SizedBox(height: AppSpacing.md),
                       Align(
                         alignment: Alignment.centerLeft,
@@ -584,55 +543,25 @@ class _BloodSheetState extends State<_BloodSheet> {
                           overlayColor: _UrgencyScale.color(_urgency01).withValues(alpha: 0.12),
                           valueIndicatorColor: _UrgencyScale.color(_urgency01),
                         ),
-                        child: Slider(
-                          value: _urgency01,
-                          onChanged: (v) => setState(() => _urgency01 = v),
-                          divisions: 10,
-                        ),
+                        child: Slider(value: _urgency01, onChanged: (v) => setState(() => _urgency01 = v), divisions: 10),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      TextField(
-                        controller: _hospital,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(labelText: 'Hôpital / Lieu (manuel)'),
-                      ),
+                      TextField(controller: _hospital, textInputAction: TextInputAction.next, decoration: const InputDecoration(labelText: 'Hôpital / Lieu (manuel)')),
                       const SizedBox(height: AppSpacing.sm),
                       Row(
                         children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _gettingPos ? null : _useGps,
-                              icon: Icon(Icons.my_location_rounded, color: medical),
-                              label: Text(_pos == null ? 'GPS auto' : 'GPS OK', style: TextStyle(color: medical)),
-                            ),
-                          ),
+                          Expanded(child: OutlinedButton.icon(onPressed: _gettingPos ? null : _useGps, icon: Icon(Icons.my_location_rounded, color: medical), label: Text(_pos == null ? 'GPS auto' : 'GPS OK', style: TextStyle(color: medical)))),
                           const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: Text(
-                              _pos == null ? 'Aucune position' : '±${_pos!.accuracy.toStringAsFixed(0)}m',
-                              textAlign: TextAlign.right,
-                              style: context.textStyles.bodySmall?.copyWith(color: theme.hintColor),
-                            ),
-                          ),
+                          Expanded(child: Text(_pos == null ? 'Aucune position' : '±${_pos!.accuracy.toStringAsFixed(0)}m', textAlign: TextAlign.right, style: context.textStyles.bodySmall?.copyWith(color: theme.hintColor))),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      TextField(
-                        controller: _quantity,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(labelText: 'Quantité (poches)'),
-                      ),
+                      TextField(controller: _quantity, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], textInputAction: TextInputAction.next, decoration: const InputDecoration(labelText: 'Quantité (poches)')),
                       const SizedBox(height: AppSpacing.md),
                       OutlinedButton.icon(
                         onPressed: _pickMedicalProof,
                         icon: Icon(Icons.upload_rounded, color: medical),
-                        label: Text(
-                          _medicalProof == null ? 'Justificatif médical (photo)' : 'Justificatif: ${_medicalProof!.name}',
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: medical),
-                        ),
+                        label: Text(_medicalProof == null ? 'Justificatif médical (photo)' : 'Justificatif: ${_medicalProof!.name}', overflow: TextOverflow.ellipsis, style: TextStyle(color: medical)),
                       ),
                       const SizedBox(height: AppSpacing.md),
                     ] else ...[
@@ -646,40 +575,40 @@ class _BloodSheetState extends State<_BloodSheet> {
                       onPressed: !canSubmit
                           ? null
                           : () {
-                          final city = _city.text.trim();
-                          final hospital = _hospital.text.trim();
-                          final note = _note.text.trim();
-                          final qty = int.tryParse(_quantity.text.trim());
-                          final requesterName = _requesterName.text.trim();
-                          final doctorName = _doctorName.text.trim();
-                          final doctorQualification = _doctorQualification.text.trim();
-                          final doctorId = _doctorId.text.trim();
-                          final contact = _contact.text.trim();
+                              final city = _city.text.trim();
+                              final hospital = _hospital.text.trim();
+                              final note = _note.text.trim();
+                              final qty = int.tryParse(_quantity.text.trim());
+                              final requesterName = _requesterName.text.trim();
+                              final doctorName = _doctorName.text.trim();
+                              final doctorQualification = _doctorQualification.text.trim();
+                              final doctorId = _doctorId.text.trim();
+                              final contact = _contact.text.trim();
 
-                          if (isRequest && (requesterName.isEmpty || doctorName.isEmpty || doctorQualification.isEmpty || doctorId.isEmpty || contact.isEmpty)) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Merci de compléter les informations du demandeur et du médecin.')));
-                            return;
-                          }
-                          context.pop(
-                            EmergencyBloodPayload(
-                              intent: _intent,
-                              bloodGroup: _group,
-                              urgency01: isRequest ? _urgency01 : 0.0,
-                              requesterName: isRequest && requesterName.isNotEmpty ? requesterName : null,
-                              doctorName: isRequest && doctorName.isNotEmpty ? doctorName : null,
-                              doctorQualification: isRequest && doctorQualification.isNotEmpty ? doctorQualification : null,
-                              doctorId: isRequest && doctorId.isNotEmpty ? doctorId : null,
-                              contact: isRequest && contact.isNotEmpty ? contact : null,
-                              hospitalOrPlace: isRequest && hospital.isNotEmpty ? hospital : null,
-                              lat: isRequest ? _pos?.latitude : null,
-                              lng: isRequest ? _pos?.longitude : null,
-                              quantityBags: isRequest ? (qty != null && qty > 0 ? qty : null) : null,
-                              medicalProofPhoto: isRequest ? _medicalProof : null,
-                              city: city.isEmpty ? null : city,
-                              note: note.isEmpty ? null : note,
-                            ),
-                          );
-                        },
+                              if (isRequest && (requesterName.isEmpty || doctorName.isEmpty || doctorQualification.isEmpty || doctorId.isEmpty || contact.isEmpty)) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Merci de compléter les informations du demandeur et du médecin.')));
+                                return;
+                              }
+                              context.pop(
+                                EmergencyBloodPayload(
+                                  intent: _intent,
+                                  bloodGroup: _group,
+                                  urgency01: isRequest ? _urgency01 : 0.0,
+                                  requesterName: isRequest && requesterName.isNotEmpty ? requesterName : null,
+                                  doctorName: isRequest && doctorName.isNotEmpty ? doctorName : null,
+                                  doctorQualification: isRequest && doctorQualification.isNotEmpty ? doctorQualification : null,
+                                  doctorId: isRequest && doctorId.isNotEmpty ? doctorId : null,
+                                  contact: isRequest && contact.isNotEmpty ? contact : null,
+                                  hospitalOrPlace: isRequest && hospital.isNotEmpty ? hospital : null,
+                                  lat: isRequest ? _pos?.latitude : null,
+                                  lng: isRequest ? _pos?.longitude : null,
+                                  quantityBags: isRequest ? (qty != null && qty > 0 ? qty : null) : null,
+                                  medicalProofPhoto: isRequest ? _medicalProof : null,
+                                  city: city.isEmpty ? null : city,
+                                  note: note.isEmpty ? null : note,
+                                ),
+                              );
+                            },
                       icon: const Icon(Icons.send_rounded, color: Colors.white),
                       label: const Text('Lancer la demande', style: TextStyle(color: Colors.white)),
                     ),
@@ -911,8 +840,8 @@ class _TrustedContactsSheetState extends State<_TrustedContactsSheet> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: _add,
-                          icon: Icon(Icons.person_add_alt_1_rounded, color: gold),
-                          label: Text('Ajouter', style: TextStyle(color: gold)),
+                        icon: Icon(Icons.person_add_alt_1_rounded, color: gold),
+                        label: Text('Ajouter', style: TextStyle(color: gold)),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
