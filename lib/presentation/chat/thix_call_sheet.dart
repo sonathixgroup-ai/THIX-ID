@@ -18,6 +18,7 @@ class ThixCallSheet extends StatefulWidget {
   final String kind; // audio|video
   final bool isCaller;
   final CallService calls;
+  
   const ThixCallSheet({
     super.key,
     required this.callId,
@@ -32,8 +33,8 @@ class ThixCallSheet extends StatefulWidget {
 }
 
 class _ThixCallSheetState extends State<ThixCallSheet> {
-  final _local = RTCVideoRenderer();
-  final _remote = RTCVideoRenderer();
+  late final RTCVideoRenderer _local;
+  late final RTCVideoRenderer _remote;
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
   StreamSubscription<List<Map<String, dynamic>>>? _signalsSub;
@@ -57,6 +58,8 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
   @override
   void initState() {
     super.initState();
+    _local = RTCVideoRenderer();
+    _remote = RTCVideoRenderer();
     unawaited(_init());
   }
 
@@ -85,7 +88,7 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
       await _local.initialize();
       await _remote.initialize();
 
-      // 3. Configuration ICE (STUN + TURN via serveurs publics pour l’instant)
+      // 3. Configuration ICE (STUN + TURN via serveurs publics pour l'instant)
       final iceServers = await _getIceServers();
 
       // 4. Créer la connexion et obtenir les médias
@@ -120,7 +123,7 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
     if (status.isGranted) return true;
     if (status.isPermanentlyDenied) {
       _snack('Permission $name définitivement refusée. Activez-la dans les paramètres.');
-      openAppSettings();
+      await openAppSettings();
       return false;
     }
     final result = await permission.request();
@@ -141,8 +144,8 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
     };
     _pc = await createPeerConnection(config);
 
-    _pc!.onIceCandidate = (c) {
-      if (c.candidate == null) return;
+    _pc!.onIceCandidate = (RTCIceCandidate? c) {
+      if (c == null || c.candidate == null || c.candidate?.isEmpty == true) return;
       unawaited(widget.calls.sendSignal(
         callId: widget.callId,
         toUserId: widget.otherUserId,
@@ -155,11 +158,11 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
       ));
     };
 
-    _pc!.onIceConnectionState = (state) {
+    _pc!.onIceConnectionState = (RTCIceConnectionState state) {
       debugPrint('ThixCallSheet: ICE state=$state');
     };
 
-    _pc!.onConnectionState = (state) {
+    _pc!.onConnectionState = (RTCPeerConnectionState state) {
       debugPrint('ThixCallSheet: pc connectionState=$state');
       if (!mounted) return;
       final ok = state == RTCPeerConnectionState.RTCPeerConnectionStateConnected;
@@ -175,7 +178,7 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
       }
     };
 
-    _pc!.onTrack = (event) {
+    _pc!.onTrack = (RTCTrackEvent event) {
       if (event.streams.isEmpty) return;
       _remote.srcObject = event.streams.first;
       if (mounted) setState(() {});
@@ -186,13 +189,24 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
       'audio': true,
       'video': _isVideo,
     };
-    final media = await navigator.mediaDevices.getUserMedia(constraints);
+    
+    MediaStream media;
+    if (kIsWeb) {
+      // Web: utiliser navigator.mediaDevices
+      final mediaDevices = await navigator.mediaDevices;
+      media = await mediaDevices.getUserMedia(constraints);
+    } else {
+      // Mobile: utiliser helper du package
+      media = await navigator.mediaDevices!.getUserMedia(constraints);
+    }
+    
     _localStream = media;
     _local.srcObject = media;
 
     // Récupérer la liste des caméras pour le swap (si vidéo)
     if (_isVideo) {
-      _cameras = await navigator.mediaDevices.enumerateDevices();
+      final mediaDevices = await navigator.mediaDevices;
+      _cameras = await mediaDevices.enumerateDevices();
       final videoDevices = _cameras!.where((d) => d.kind == 'videoinput').toList();
       if (videoDevices.isNotEmpty) {
         _currentCameraId = videoDevices.first.deviceId;
@@ -200,8 +214,8 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
       }
     }
 
-    for (final t in media.getTracks()) {
-      await _pc!.addTrack(t, media);
+    for (final track in media.getTracks()) {
+      await _pc!.addTrack(track, media);
     }
   }
 
@@ -212,7 +226,7 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
       _snack('Une seule caméra disponible');
       return;
     }
-    // Basculer vers l’autre caméra
+    // Basculer vers l'autre caméra
     final index = videoDevices.indexWhere((d) => d.deviceId == _currentCameraId);
     final nextIndex = (index + 1) % videoDevices.length;
     final nextDevice = videoDevices[nextIndex];
@@ -222,7 +236,8 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
     final videoTracks = _localStream!.getVideoTracks();
     if (videoTracks.isNotEmpty) {
       final videoTrack = videoTracks.first;
-      final newStream = await navigator.mediaDevices.getUserMedia({
+      final mediaDevices = await navigator.mediaDevices;
+      final newStream = await mediaDevices.getUserMedia({
         'audio': false,
         'video': {'deviceId': {'exact': nextDevice.deviceId}},
       });
@@ -242,26 +257,28 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
   }
 
   Future<void> _startSignalListener() async {
-    final me = SupabaseConfig.client.auth.currentUser;
+    final me = SupabaseConfig.client.auth.currentSession?.user;
     if (me == null) throw Exception('Not authenticated');
     _signalsSub = widget.calls.streamSignals(callId: widget.callId, forUserId: me.id).listen((signals) {
-      for (final s in signals.reversed) {
-        final id = (s['id'] ?? '').toString();
+      for (final signal in signals.reversed) {
+        final id = (signal['id'] ?? '').toString();
         if (id.isEmpty || _handledSignalIds.contains(id)) continue;
         _handledSignalIds.add(id);
-        unawaited(_handleSignal(s));
+        unawaited(_handleSignal(signal));
       }
     });
   }
 
-  Future<void> _handleSignal(Map<String, dynamic> s) async {
+  Future<void> _handleSignal(Map<String, dynamic> signal) async {
     try {
-      final type = (s['type'] as String?) ?? '';
-      final payload = (s['payload'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
+      final type = (signal['type'] as String?) ?? '';
+      final payload = (signal['payload'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
       if (_pc == null) return;
 
       if (type == 'offer') {
-        final offer = RTCSessionDescription(payload['sdp'] as String?, payload['type'] as String?);
+        final sdp = payload['sdp'] as String? ?? '';
+        final sdpType = payload['type'] as String? ?? 'offer';
+        final offer = RTCSessionDescription(sdp, sdpType);
         await _pc!.setRemoteDescription(offer);
         final answer = await _pc!.createAnswer();
         await _pc!.setLocalDescription(answer);
@@ -272,14 +289,15 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
           payload: {'sdp': answer.sdp, 'type': answer.type},
         );
       } else if (type == 'answer') {
-        final ans = RTCSessionDescription(payload['sdp'] as String?, payload['type'] as String?);
-        await _pc!.setRemoteDescription(ans);
+        final sdp = payload['sdp'] as String? ?? '';
+        final sdpType = payload['type'] as String? ?? 'answer';
+        final answer = RTCSessionDescription(sdp, sdpType);
+        await _pc!.setRemoteDescription(answer);
       } else if (type == 'candidate') {
-        final cand = RTCIceCandidate(
-          payload['candidate'] as String?,
-          payload['sdpMid'] as String?,
-          (payload['sdpMLineIndex'] as num?)?.toInt(),
-        );
+        final candidate = payload['candidate'] as String? ?? '';
+        final sdpMid = payload['sdpMid'] as String? ?? '';
+        final sdpMLineIndex = (payload['sdpMLineIndex'] as num?)?.toInt() ?? 0;
+        final cand = RTCIceCandidate(candidate, sdpMid, sdpMLineIndex);
         await _pc!.addCandidate(cand);
       } else if (type == 'hangup' || type == 'decline') {
         await _end(reason: type);
@@ -322,8 +340,8 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
     final stream = _localStream;
     if (stream == null) return;
     final enabled = !_micOn;
-    for (final t in stream.getAudioTracks()) {
-      t.enabled = enabled;
+    for (final track in stream.getAudioTracks()) {
+      await track.enable(enabled);
     }
     setState(() => _micOn = enabled);
   }
@@ -332,8 +350,8 @@ class _ThixCallSheetState extends State<ThixCallSheet> {
     final stream = _localStream;
     if (stream == null) return;
     final enabled = !_camOn;
-    for (final t in stream.getVideoTracks()) {
-      t.enabled = enabled;
+    for (final track in stream.getVideoTracks()) {
+      await track.enable(enabled);
     }
     setState(() => _camOn = enabled);
   }
@@ -491,6 +509,7 @@ class _Action extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback? onTap;
+  
   const _Action({required this.icon, required this.tooltip, this.onTap});
 
   @override
@@ -521,6 +540,7 @@ class _Pill extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
+  
   const _Pill({required this.icon, required this.label, this.onTap});
 
   @override
@@ -556,6 +576,7 @@ class _Pill extends StatelessWidget {
 
 class _Hangup extends StatelessWidget {
   final VoidCallback? onTap;
+  
   const _Hangup({required this.onTap});
 
   @override
