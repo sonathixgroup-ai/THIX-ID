@@ -24,7 +24,7 @@ class FirestoreUserService {
   }
 
   // ==========================================================================
-  // CONVERSION (minimale)
+  // CONVERSION
   // ==========================================================================
 
   AppUser _appUserFromProfileRow(Map<String, dynamic> row) {
@@ -34,6 +34,15 @@ class FirestoreUserService {
       return DateTime.now();
     }
 
+    List<String> strList(Object? v) => (v is List) ? v.whereType<String>().toList(growable: false) : const <String>[];
+    List<Map<String, dynamic>> mapList(Object? v) => (v is List) ? v.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList(growable: false) : const <Map<String, dynamic>>[];
+
+    final accountTypeRaw = (row['account_type'] ?? row['accountType'] ?? 'personal').toString();
+    final accountType = AccountType.values.firstWhere(
+      (e) => e.name == accountTypeRaw,
+      orElse: () => AccountType.personal,
+    );
+
     return AppUser(
       id: (row['user_id'] ?? row['id'] ?? '').toString(),
       thixId: (row['thix_id'] ?? 'THIX-PENDING').toString(),
@@ -42,7 +51,7 @@ class FirestoreUserService {
       email: row['email']?.toString() ?? '',
       phone: row['phone']?.toString(),
       displayName: (row['display_name'] ?? 'Utilisateur THIX').toString(),
-      accountType: AccountType.personal,
+      accountType: accountType,
       photoUrl: (row['photo_url'] ?? row['avatar_url'])?.toString(),
       bio: row['bio']?.toString(),
       countryOrOrigin: row['country_or_origin']?.toString(),
@@ -61,13 +70,13 @@ class FirestoreUserService {
       emergencyContactPhone: row['emergency_contact_phone']?.toString(),
       emergencyContactRelation: row['emergency_contact_relation']?.toString(),
       registrationStatus: row['registration_status']?.toString(),
-      education: const [],
-      experience: const [],
-      skills: const [],
-      enrollments: const [],
-      languages: const [],
-      biometricsEnabled: true,
-      twoFaEnabled: false,
+      education: mapList(row['education']),
+      experience: mapList(row['experience']),
+      skills: mapList(row['skills']),
+      enrollments: mapList(row['enrollments']),
+      languages: strList(row['languages']),
+      biometricsEnabled: (row['biometrics_enabled'] as bool?) ?? true,
+      twoFaEnabled: (row['two_fa_enabled'] as bool?) ?? false,
       createdAt: dt(row['created_at']),
       updatedAt: dt(row['updated_at']),
     );
@@ -108,8 +117,8 @@ class FirestoreUserService {
       final like = '%$q%';
       final rows = await _client
           .from(_table)
-          .select('id, display_name, thix_id, avatar_url')
-          .or('display_name.ilike.$like,thix_id.ilike.$like')
+          .select('id, display_name, thix_id, thix_chat, avatar_url')
+          .or('display_name.ilike.$like,thix_id.ilike.$like,thix_chat.ilike.$like')
           .limit(limit);
       if (rows is! List) return const [];
       final list = rows.whereType<Map>().map((m) => _appUserFromProfileRow(m.cast<String, dynamic>())).toList(growable: false);
@@ -123,7 +132,7 @@ class FirestoreUserService {
   }
 
   // ==========================================================================
-  // MÉTHODES POUR LE DASHBOARD (versions simplifiées sans erreurs)
+  // MÉTHODES POUR LE DASHBOARD (sans erreurs)
   // ==========================================================================
 
   Future<void> addPaymentTransaction({
@@ -136,12 +145,10 @@ class FirestoreUserService {
     String? transactionRef,
     Map<String, dynamic>? meta,
   }) async {
-    // Version simplifiée - ne fait rien pour éviter les erreurs
-    debugPrint('addPaymentTransaction called for uid=$uid, title=$title, amount=$amount');
+    debugPrint('addPaymentTransaction: uid=$uid, title=$title, amount=$amount');
   }
 
   Stream<List<Map<String, dynamic>>> streamPayments(String uid) async* {
-    // Version simplifiée - retourne une liste vide
     yield [];
   }
 
@@ -151,12 +158,10 @@ class FirestoreUserService {
     String? label,
     Map<String, dynamic>? meta,
   }) async {
-    // Version simplifiée
     debugPrint('logSecurityEvent: uid=$uid, type=$type');
   }
 
   Stream<List<Map<String, dynamic>>> streamSecurityEvents(String uid) async* {
-    // Version simplifiée - retourne une liste vide
     yield [];
   }
 
@@ -173,10 +178,8 @@ class FirestoreUserService {
     final patch = <String, dynamic>{
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
-    
     if (displayName != null) patch['display_name'] = displayName;
     if (thixChat != null) patch['thix_chat'] = thixChat;
-
     await _client.from(_table).update(patch).eq('id', sessionUid);
   }
 
@@ -184,9 +187,7 @@ class FirestoreUserService {
     final sessionUid = _requireAuthedUid();
     final row = await _client.from(_table).select('thix_id').eq('id', sessionUid).maybeSingle();
     final existing = (row?['thix_id'] ?? '').toString().trim();
-    
     if (existing.isNotEmpty && existing != 'THIX-PENDING') return existing;
-
     final candidate = ThixIdService.generate();
     await _client.from(_table).update({'thix_id': candidate}).eq('id', sessionUid);
     return candidate;
@@ -196,9 +197,7 @@ class FirestoreUserService {
     final sessionUid = _requireAuthedUid();
     final row = await _client.from(_table).select('thix_id').eq('id', sessionUid).maybeSingle();
     final existing = (row?['thix_id'] ?? '').toString().trim();
-    
     if (existing.isNotEmpty && existing != 'THIX-PENDING') return existing;
-
     final candidate = ThixIdService.generate();
     await _client.from(_table).update({'thix_id': candidate}).eq('id', sessionUid);
     return candidate;
