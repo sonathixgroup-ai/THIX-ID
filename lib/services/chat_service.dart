@@ -10,7 +10,7 @@ import 'package:thix_id/services/platform_file_from_path_stub.dart' if (dart.lib
 
 class ChatSummary {
   final String id;
-  final String type; // direct | group | etc.
+  final String type;
   final String? directKey;
   final List<String> participants;
   final Map<String, String> participantName;
@@ -32,7 +32,6 @@ class ChatSummary {
   static List<String> _parseParticipants(Object? raw) {
     if (raw == null) return const <String>[];
     if (raw is List) return raw.whereType<String>().toList(growable: false);
-    // Sometimes PostgREST returns JSONB as Map or as a JSON string depending on settings.
     if (raw is Map) {
       final v = raw['uids'] ?? raw['participants'] ?? raw['users'];
       if (v is List) return v.whereType<String>().toList(growable: false);
@@ -164,16 +163,11 @@ DateTime? _tryParseDate(Object? v) {
 }
 
 class ChatService {
-  /// Marker used to embed rich payloads inside the plain-text message.
-  ///
-  /// This is intentionally text-based to stay compatible with Supabase schema
-  /// drift across projects (some deployments don't have `type`/`extra` columns).
   static const String moneyTransferMarker = '[[THIX_MONEY_TRANSFER_V1]]';
 
   final SupabaseClient _client;
   ChatService({SupabaseClient? client}) : _client = client ?? SupabaseConfig.client;
 
-  // Canonical tables (provided by supabase/migrations in this repo).
   static const String chatsTable = 'thix_chat_chats';
   static const String messagesTable = 'thix_chat_messages';
   static const String readsTable = 'thix_chat_reads';
@@ -182,19 +176,12 @@ class ChatService {
   static const String profilesTable = 'profiles';
 
   final Map<String, ChatProfileBasics> _profileCache = <String, ChatProfileBasics>{};
-
-  // Some Supabase projects connected to this repo were created earlier with a
-  // simplified chat schema where `thix_chat_chats` stores *messages* directly
-  // (columns: sender_id, receiver_id, message_content, direct_key, is_read ...)
-  // and the canonical tables `thix_chat_messages`, `thix_chat_reads` don't
-  // exist. We detect and adapt at runtime.
   bool? _legacySchema;
 
   Future<bool> _isLegacySchema() async {
     final cached = _legacySchema;
     if (cached != null) return cached;
     try {
-      // If this succeeds, canonical schema is present.
       await _client.from(messagesTable).select('id').limit(1);
       _legacySchema = false;
       return false;
@@ -205,10 +192,6 @@ class ChatService {
     }
   }
 
-  /// Legacy helper still used by UI in a few places.
-  ///
-  /// Returns a *virtual* id `direct:<sorted_uidA_uidB>`. Most APIs accept either
-  /// a real chat UUID or this virtual id.
   String directChatIdForUids(String a, String b) => 'direct:${_directKey(a, b)}';
 
   ({String a, String b})? _parseDirectChatVirtualId(String chatId) {
@@ -225,9 +208,7 @@ class ChatService {
 
   Future<String> _resolveChatUuid(String chatId, {AppUser? me}) async {
     final raw = chatId.trim();
-    // Already a uuid.
     if (isUuidLike(raw)) return raw;
-
     final parsed = _parseDirectChatVirtualId(raw);
     if (parsed == null) throw Exception('ChatId invalide.');
     final a = parsed.a;
@@ -242,70 +223,31 @@ class ChatService {
         yield await fetch();
       } catch (e) {
         debugPrint('ChatService: poll error=$e');
-        // Keep the stream alive. Temporary network/RLS errors shouldn't
-        // permanently break the UI.
       }
       await Future<void>.delayed(interval);
     }
   }
 
-  Stream<List<T>> _realtimeListStream<T>({
-    required String channelName,
-    required Future<List<T>> Function() fetch,
-    required void Function(RealtimeChannel channel, VoidCallback onAnyChange) bind,
-    Duration debounce = const Duration(milliseconds: 250),
-  }) {
-    final controller = StreamController<List<T>>.broadcast();
-    Timer? t;
-    bool closed = false;
-
-    void scheduleEmit() {
-      if (closed) return;
-      t?.cancel();
-      t = Timer(debounce, () async {
-        if (closed || controller.isClosed) return;
-        try {
-          controller.add(await fetch());
-        } catch (e) {
-          debugPrint('ChatService: realtime fetch failed channel=$channelName err=$e');
-          // Keep stream alive.
-        }
-      });
-    }
-
-    final channel = _client.channel(channelName);
-    controller.onListen = () {
-      scheduleEmit();
-      bind(channel, scheduleEmit);
-      channel.subscribe((status, err) {
-        if (err != null) debugPrint('ChatService: realtime subscribe error channel=$channelName status=$status err=$err');
-      });
-    };
-
-    controller.onCancel = () async {
-      closed = true;
-      t?.cancel();
-      try {
-        await _client.removeChannel(channel);
-      } catch (e) {
-        debugPrint('ChatService: removeChannel failed channel=$channelName err=$e');
-      }
-      await controller.close();
-    };
-
-    return controller.stream;
-  }
-
   Stream<List<ChatSummary>> streamChatsForUser(String uid) {
-    Future<List<ChatSummary>> fetch() async {
+    final controller = StreamController<List<ChatSummary>>.broadcast();
+    Timer? pollTimer;
+    bool isActive = true;
+
+    Future<void> fetch() async {
+      if (!isActive) return;
       try {
         final legacy = await _isLegacySchema();
         if (legacy) {
           final rows = await _selectLegacyChatMessagesForUser(uid);
-          return await _summariesFromLegacyMessageRows(uid, rows);
+          final summaries = await _summariesFromLegacyMessageRows(uid, rows);
+          if (!controller.isClosed) controller.add(summaries);
+          return;
         }
         final chats = await _selectChatsForUser(uid);
-        if (chats.isEmpty) return const <ChatSummary>[];
+        if (chats.isEmpty) {
+          if (!controller.isClosed) controller.add([]);
+          return;
+        }
         final otherUids = <String>{};
         for (final c in chats) {
           final parts = ChatSummary._parseParticipants(c['participants']);
@@ -315,7 +257,7 @@ class ChatService {
         }
         final profiles = await _fetchProfileBasics(otherUids.toList(growable: false));
 
-        return chats.map((c) {
+        final summaries = chats.map((c) {
           final id = (c['id'] as String?) ?? '';
           final parts = ChatSummary._parseParticipants(c['participants']);
           final pnRaw = (c['participant_name'] as Map?)?.cast<String, dynamic>() ?? const {};
@@ -345,33 +287,27 @@ class ChatService {
             lastMessageAt: _tryParseDate(c['last_message_at']),
           );
         }).toList(growable: false);
+        if (!controller.isClosed) controller.add(summaries);
       } catch (e) {
         debugPrint('ChatService: fetch chats failed uid=$uid err=$e');
-        return const <ChatSummary>[];
+        if (!controller.isClosed) controller.add([]);
       }
     }
 
-    // Realtime doesn't support "contains" filters directly in the channel API,
-    // so we subscribe to table changes and refetch for this user.
-    return _realtimeListStream<ChatSummary>(
-      channelName: 'thix_chat_chats:watch:$uid',
-      fetch: fetch,
-      bind: (channel, onAnyChange) {
-        channel.onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: chatsTable,
-          callback: (_) => onAnyChange(),
-        );
-      },
-    );
+    controller.onListen = () {
+      isActive = true;
+      fetch();
+      pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => fetch());
+    };
+    controller.onCancel = () {
+      isActive = false;
+      pollTimer?.cancel();
+      controller.close();
+    };
+    return controller.stream;
   }
 
   Future<List<Map<String, dynamic>>> _selectChatsForUser(String uid) async {
-    // Canonical schema (repo migrations) includes:
-    // - title, participant_name, participant_thix, last_message, last_message_at
-    // Some deployments created only a subset (type/participants/direct_key).
-    // We try the canonical query first; on schema/cache errors we retry minimal.
     try {
       final rows = await _client
           .from(chatsTable)
@@ -385,25 +321,10 @@ class ChatService {
     } catch (e) {
       debugPrint('ChatService: _selectChatsForUser canonical select failed uid=$uid err=$e');
     }
-
-    try {
-      final rows = await _client
-          .from(chatsTable)
-          .select('id,type,direct_key,participants,updated_at')
-          .contains('participants', [uid])
-          .order('updated_at', ascending: false)
-          .limit(100);
-      if (rows is! List) return const <Map<String, dynamic>>[];
-      return rows.map((r) => (r as Map).cast<String, dynamic>()).toList(growable: false);
-    } catch (e) {
-      debugPrint('ChatService: _selectChatsForUser minimal select failed uid=$uid err=$e');
-      return const <Map<String, dynamic>>[];
-    }
+    return const <Map<String, dynamic>>[];
   }
 
   Future<List<Map<String, dynamic>>> _selectLegacyChatMessagesForUser(String uid) async {
-    // Legacy schema: `thix_chat_chats` contains messages. Fetch the latest N rows
-    // involving the user, then summarize client-side by direct_key.
     final rows = await _client
         .from(chatsTable)
         .select('id, direct_key, sender_id, receiver_id, message_content, created_at, updated_at, type, participants')
@@ -415,7 +336,6 @@ class ChatService {
   }
 
   Future<List<ChatSummary>> _summariesFromLegacyMessageRows(String uid, List<Map<String, dynamic>> rows) async {
-    // Pick the latest message per direct_key.
     final latestByKey = <String, Map<String, dynamic>>{};
     for (final r in rows) {
       final key = (r['direct_key'] as String?)?.trim() ?? '';
@@ -467,162 +387,102 @@ class ChatService {
     return out;
   }
 
-  /// Deprecated with the simplified schema.
   Future<ChatSummary?> fetchChatById({required String chatId}) async => null;
 
   bool isUuidLike(String v) => RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(v.trim());
 
   Stream<List<ChatContact>> streamRecentContacts({required String uid, int limit = 8}) {
-    return streamChatsForUser(uid).map((chats) {
+    final controller = StreamController<List<ChatContact>>.broadcast();
+    Timer? pollTimer;
+    bool isActive = true;
+
+    Future<void> fetch() async {
+      if (!isActive) return;
+      final chats = await _selectChatsForUser(uid);
       final contacts = <String, ChatContact>{};
       for (final c in chats) {
-        final otherUid = c.participants.firstWhere((p) => p != uid, orElse: () => '');
+        final participants = ChatSummary._parseParticipants(c['participants']);
+        final otherUid = participants.firstWhere((p) => p != uid, orElse: () => '');
         if (otherUid.isEmpty) continue;
-        final otherName = c.participantName[otherUid] ?? 'Utilisateur';
-        final otherThix = c.participantThix[otherUid] ?? '';
+        final pnRaw = (c['participant_name'] as Map?)?.cast<String, dynamic>() ?? const {};
+        final otherName = pnRaw[otherUid]?.toString() ?? 'Utilisateur';
+        final ptRaw = (c['participant_thix'] as Map?)?.cast<String, dynamic>() ?? const {};
+        final otherThix = ptRaw[otherUid]?.toString() ?? '';
         contacts.putIfAbsent(otherUid, () => ChatContact(uid: otherUid, displayName: otherName, thixId: otherThix));
         if (contacts.length >= limit) break;
       }
-      return contacts.values.toList(growable: false);
-    });
+      if (!controller.isClosed) controller.add(contacts.values.toList(growable: false));
+    }
+
+    controller.onListen = () {
+      isActive = true;
+      fetch();
+      pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => fetch());
+    };
+    controller.onCancel = () {
+      isActive = false;
+      pollTimer?.cancel();
+      controller.close();
+    };
+    return controller.stream;
   }
 
   Stream<List<ChatMessage>> streamMessages(String chatId) {
-    // Canonical schema: resolve UUID once, then subscribe with a chat_id filter.
-    // Legacy schema: chatId is `direct:<key>` and we filter on direct_key.
     final controller = StreamController<List<ChatMessage>>.broadcast();
-    RealtimeChannel? channel;
+    Timer? pollTimer;
+    bool isActive = true;
     String? uuid;
-    Timer? debounce;
-    bool closed = false;
 
-    Future<void> emitLatest() async {
-      if (closed) return;
-      debounce?.cancel();
-      debounce = Timer(const Duration(milliseconds: 200), () async {
-        if (closed) return;
-        try {
-          final legacy = await _isLegacySchema();
-          if (legacy) {
-            final parsed = _parseDirectChatVirtualId(chatId);
-            if (parsed == null) throw Exception('ChatId invalide.');
-            final key = _directKey(parsed.a, parsed.b);
-            final rows = await _client
-                .from(chatsTable)
-                .select('id,direct_key,sender_id,receiver_id,message_content,created_at,updated_at,type')
-                .eq('direct_key', key)
-                .order('created_at', ascending: false)
-                .limit(200);
-            final base = (rows is List) ? rows.map((r) => (r as Map).cast<String, dynamic>()).toList(growable: false) : const <Map<String, dynamic>>[];
-            final normalized = base.map((r) {
-              final out = Map<String, dynamic>.from(r);
-              out['chat_id'] = chatId; // virtual
-              out['text'] = (r['message_content'] as String?) ?? '';
-              out['sender_name'] = '';
-              out['sender_thix_id'] = '';
-              return out;
-            }).toList(growable: false);
-            final enriched = await _applyProfileEnrichmentForMessageRows(normalized);
-            controller.add(enriched.map(ChatMessage.fromRow).toList(growable: false));
-            return;
-          }
-
-          final id = uuid ?? await _resolveChatUuid(chatId);
-          uuid ??= id;
-          final rows = await _client.from(messagesTable).select('*').eq('chat_id', id).order('created_at', ascending: false).limit(200);
-          final base = (rows is List) ? rows.map((r) => (r as Map).cast<String, dynamic>()).toList(growable: false) : const <Map<String, dynamic>>[];
-          final enriched = await _applyProfileEnrichmentForMessageRows(base);
-          controller.add(enriched.map(ChatMessage.fromRow).toList(growable: false));
-        } catch (e) {
-          debugPrint('ChatService: emitLatest messages failed chat=$chatId err=$e');
-        }
-      });
-    }
-
-    controller.onListen = () async {
-      await emitLatest();
+    Future<void> fetch() async {
+      if (!isActive) return;
       try {
         final legacy = await _isLegacySchema();
         if (legacy) {
           final parsed = _parseDirectChatVirtualId(chatId);
           if (parsed == null) throw Exception('ChatId invalide.');
           final key = _directKey(parsed.a, parsed.b);
-          channel = _client.channel('thix_chat_chats:direct:$key');
-          final filter = PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'direct_key', value: key);
-          channel!
-              .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: chatsTable, filter: filter, callback: (_) => emitLatest())
-              .subscribe((status, err) {
-            if (err != null) debugPrint('ChatService: legacy messages realtime subscribe error status=$status err=$err');
-          });
+          final rows = await _client
+              .from(chatsTable)
+              .select('id,direct_key,sender_id,receiver_id,message_content,created_at,updated_at,type')
+              .eq('direct_key', key)
+              .order('created_at', ascending: false)
+              .limit(200);
+          final base = (rows is List) ? rows.map((r) => (r as Map).cast<String, dynamic>()).toList(growable: false) : const <Map<String, dynamic>>[];
+          final normalized = base.map((r) {
+            final out = Map<String, dynamic>.from(r);
+            out['chat_id'] = chatId;
+            out['text'] = (r['message_content'] as String?) ?? '';
+            out['sender_name'] = '';
+            out['sender_thix_id'] = '';
+            return out;
+          }).toList(growable: false);
+          final enriched = await _applyProfileEnrichmentForMessageRows(normalized);
+          if (!controller.isClosed) controller.add(enriched.map(ChatMessage.fromRow).toList(growable: false));
           return;
         }
 
-        uuid ??= await _resolveChatUuid(chatId);
-        final id = uuid!;
-        channel = _client.channel('thix_chat_messages:$id');
-        final filter = PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'chat_id', value: id);
-        channel!
-            .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: messagesTable, filter: filter, callback: (_) => emitLatest())
-            .subscribe((status, err) {
-          if (err != null) debugPrint('ChatService: messages realtime subscribe error status=$status err=$err');
-        });
+        final id = uuid ?? await _resolveChatUuid(chatId);
+        uuid ??= id;
+        final rows = await _client.from(messagesTable).select('*').eq('chat_id', id).order('created_at', ascending: false).limit(200);
+        final base = (rows is List) ? rows.map((r) => (r as Map).cast<String, dynamic>()).toList(growable: false) : const <Map<String, dynamic>>[];
+        final enriched = await _applyProfileEnrichmentForMessageRows(base);
+        if (!controller.isClosed) controller.add(enriched.map(ChatMessage.fromRow).toList(growable: false));
       } catch (e) {
-        debugPrint('ChatService: messages realtime setup failed chat=$chatId err=$e');
-        // Fallback: keep it usable via polling.
-        _poll(() async {
-          try {
-            final legacy = await _isLegacySchema();
-            if (legacy) {
-              final parsed = _parseDirectChatVirtualId(chatId);
-              if (parsed == null) return const <ChatMessage>[];
-              final key = _directKey(parsed.a, parsed.b);
-              final rows = await _client
-                  .from(chatsTable)
-                  .select('id,direct_key,sender_id,receiver_id,message_content,created_at,updated_at,type')
-                  .eq('direct_key', key)
-                  .order('created_at', ascending: false)
-                  .limit(200);
-              final base = (rows is List) ? rows.map((r) => (r as Map).cast<String, dynamic>()).toList(growable: false) : const <Map<String, dynamic>>[];
-              final normalized = base.map((r) {
-                final out = Map<String, dynamic>.from(r);
-                out['chat_id'] = chatId;
-                out['text'] = (r['message_content'] as String?) ?? '';
-                out['sender_name'] = '';
-                out['sender_thix_id'] = '';
-                return out;
-              }).toList(growable: false);
-              final enriched = await _applyProfileEnrichmentForMessageRows(normalized);
-              return enriched.map(ChatMessage.fromRow).toList(growable: false);
-            }
-
-            final id = await _resolveChatUuid(chatId);
-            final rows = await _client.from(messagesTable).select('*').eq('chat_id', id).order('created_at', ascending: false).limit(200);
-            final base = (rows is List) ? rows.map((r) => (r as Map).cast<String, dynamic>()).toList(growable: false) : const <Map<String, dynamic>>[];
-            final enriched = await _applyProfileEnrichmentForMessageRows(base);
-            return enriched.map(ChatMessage.fromRow).toList(growable: false);
-          } catch (e2) {
-            debugPrint('ChatService: fallback poll messages failed chat=$chatId err=$e2');
-            return const <ChatMessage>[];
-          }
-        }, interval: const Duration(seconds: 2)).listen((v) {
-          if (!closed) controller.add(v);
-        });
+        debugPrint('ChatService: fetch messages failed chat=$chatId err=$e');
+        if (!controller.isClosed) controller.add([]);
       }
-    };
+    }
 
-    controller.onCancel = () async {
-      closed = true;
-      debounce?.cancel();
-      if (channel != null) {
-        try {
-          await _client.removeChannel(channel!);
-        } catch (e) {
-          debugPrint('ChatService: removeChannel messages failed err=$e');
-        }
-      }
-      await controller.close();
+    controller.onListen = () {
+      isActive = true;
+      fetch();
+      pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => fetch());
     };
-
+    controller.onCancel = () {
+      isActive = false;
+      pollTimer?.cancel();
+      controller.close();
+    };
     return controller.stream;
   }
 
@@ -690,17 +550,37 @@ class ChatService {
   }
 
   Stream<DateTime?> streamReadAt({required String chatId, required String uid}) {
-    return _poll(() async {
+    final controller = StreamController<DateTime?>.broadcast();
+    Timer? pollTimer;
+    bool isActive = true;
+
+    Future<void> fetch() async {
+      if (!isActive) return;
       try {
         final uuid = await _resolveChatUuid(chatId);
         final row = await _client.from(readsTable).select('read_at').eq('chat_id', uuid).eq('user_id', uid).maybeSingle();
-        if (row == null) return null;
-        return _tryParseDate((row as Map)['read_at']);
+        if (row == null) {
+          if (!controller.isClosed) controller.add(null);
+          return;
+        }
+        if (!controller.isClosed) controller.add(_tryParseDate((row as Map)['read_at']));
       } catch (e) {
         debugPrint('ChatService: streamReadAt failed chat=$chatId uid=$uid err=$e');
-        return null;
+        if (!controller.isClosed) controller.add(null);
       }
-    }, interval: const Duration(seconds: 2));
+    }
+
+    controller.onListen = () {
+      isActive = true;
+      fetch();
+      pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => fetch());
+    };
+    controller.onCancel = () {
+      isActive = false;
+      pollTimer?.cancel();
+      controller.close();
+    };
+    return controller.stream;
   }
 
   Future<void> markChatRead({required String chatId, required String uid}) async {
@@ -774,11 +654,6 @@ class ChatService {
     );
   }
 
-  /// Sends a money transfer request/notification as a chat message.
-  ///
-  /// No wallet is used: this is a per-transaction instruction (e.g. Mobile Money).
-  /// The payload is embedded into the text field using [moneyTransferMarker] so
-  /// the UI can render it as a rich bubble.
   Future<void> sendMoneyTransfer({
     required String chatId,
     required AppUser sender,
@@ -809,11 +684,8 @@ class ChatService {
       'created_at': DateTime.now().toUtc().toIso8601String(),
     };
 
-    // Human-readable summary + machine payload.
     final summary = '💸 Transfert $safeAmount $safeCurrency • $safeNetwork';
     final text = '$moneyTransferMarker${jsonEncode(payload)}\n$summary';
-
-    // Use the resilient text-only pipeline.
     await sendPayload(chatId: chatId, sender: sender, type: 'money_transfer', text: text, previewText: summary, extra: payload);
   }
 
@@ -903,7 +775,6 @@ class ChatService {
       }
 
       final uuid = await _resolveChatUuid(chatId, me: sender);
-
       await _client.from(messagesTable).insert({
         'chat_id': uuid,
         'type': type,
@@ -916,8 +787,6 @@ class ChatService {
         'updated_at': now,
       });
 
-      // Best-effort chat preview update.
-      // Some deployments do not yet have last_message/last_message_at columns.
       try {
         await _client.from(chatsTable).update({
           'last_message': previewText,
@@ -939,15 +808,12 @@ class ChatService {
   }
 
   Map<String, dynamic> _extraToMessageColumns(Map<String, dynamic> extra) {
-    // The table has explicit nullable columns for common payloads.
-    // Only map known keys (avoid column-not-found in reduced schemas).
     final out = <String, dynamic>{};
     void set(String col, String key) {
       final v = extra[key];
       if (v == null) return;
       out[col] = v;
     }
-
     set('sticker', 'sticker');
     set('file_name', 'file_name');
     set('file_ext', 'file_ext');
@@ -970,10 +836,8 @@ class ChatService {
     required String b,
     AppUser? me,
   }) async {
-    // Legacy schema: no separate chat row to create. The thread id is virtual.
     if (await _isLegacySchema()) return 'direct:$key';
 
-    // Find by direct_key.
     try {
       final existing = await _client.from(chatsTable).select('id').eq('direct_key', key).maybeSingle();
       if (existing != null) {
@@ -1006,7 +870,6 @@ class ChatService {
       });
       return (inserted['id'] as String?) ?? '';
     } catch (e) {
-      // If another client created it concurrently, fetch again.
       debugPrint('ChatService: getOrCreateChatByDirectKey insert failed key=$key err=$e');
       final existing = await _client.from(chatsTable).select('id').eq('direct_key', key).maybeSingle();
       if (existing != null) {
@@ -1017,7 +880,6 @@ class ChatService {
   }
 
   Future<Map<String, dynamic>> _insertChatRowWithFallbacks({required Map<String, dynamic> payload}) async {
-    // Progressive fallback to support manual/partial schemas and PostgREST schema-cache delay.
     final attempts = <Map<String, dynamic>>[
       payload,
       {
@@ -1102,9 +964,6 @@ class ChatService {
     }
   }
 
-  /// Fetches a profile by exact THIX ID (recommended for “start first chat”).
-  ///
-  /// Returns null when not found or when RLS denies access.
   Future<ChatContact?> fetchProfileByThixId(String thixId) async {
     final v = thixId.trim();
     if (v.isEmpty) return null;
@@ -1124,10 +983,6 @@ class ChatService {
     }
   }
 
-  /// Fetches a profile by **exact** THIX ID or **exact** THIX Chat handle.
-  ///
-  /// This helps when users paste either identifier in the same field.
-  /// Returns null when not found (or when RLS denies access).
   Future<ChatContact?> fetchProfileByThixIdOrHandle(String input) async {
     final v = input.trim();
     if (v.isEmpty) return null;
@@ -1168,7 +1023,12 @@ class ChatService {
   }
 
   Stream<List<String>> streamTypingUsers({required String chatId, required String excludeUid}) {
-    return _poll(() async {
+    final controller = StreamController<List<String>>.broadcast();
+    Timer? pollTimer;
+    bool isActive = true;
+
+    Future<void> fetch() async {
+      if (!isActive) return;
       try {
         final uuid = await _resolveChatUuid(chatId);
         final rows = await _client
@@ -1178,16 +1038,32 @@ class ChatService {
             .eq('is_typing', true)
             .order('updated_at', ascending: false)
             .limit(10);
-        if (rows is! List) return const <String>[];
-        return rows
+        if (rows is! List) {
+          if (!controller.isClosed) controller.add([]);
+          return;
+        }
+        final typingUsers = rows
             .map((r) => (r as Map)['user_id']?.toString() ?? '')
             .where((id) => id.isNotEmpty && id != excludeUid)
             .toList(growable: false);
+        if (!controller.isClosed) controller.add(typingUsers);
       } catch (e) {
         debugPrint('ChatService: streamTypingUsers failed chat=$chatId err=$e');
-        return const <String>[];
+        if (!controller.isClosed) controller.add([]);
       }
-    }, interval: const Duration(seconds: 2));
+    }
+
+    controller.onListen = () {
+      isActive = true;
+      fetch();
+      pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => fetch());
+    };
+    controller.onCancel = () {
+      isActive = false;
+      pollTimer?.cancel();
+      controller.close();
+    };
+    return controller.stream;
   }
 
   String _directKey(String a, String b) {
@@ -1195,4 +1071,3 @@ class ChatService {
     return pair.join('_');
   }
 }
-
