@@ -32,7 +32,7 @@ dependencies:
   path_provider: ^2.1.4
 
   video_player: ^2.9.2
-  agora_rtc_engine: ^6.0.0
+  agora_rtc_engine: ^6.3.0
   record: ^5.1.2
 
   geolocator: ^13.0.4
