@@ -24,7 +24,7 @@ class FirestoreUserService {
   }
 
   // ==========================================================================
-  // CONVERSION
+  // MÉTHODES DE CONVERSION
   // ==========================================================================
 
   AppUser _appUserFromProfileRow(Map<String, dynamic> row) {
@@ -34,8 +34,13 @@ class FirestoreUserService {
       return DateTime.now();
     }
 
-    List<String> strList(Object? v) => (v is List) ? v.whereType<String>().toList(growable: false) : const <String>[];
-    List<Map<String, dynamic>> mapList(Object? v) => (v is List) ? v.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList(growable: false) : const <Map<String, dynamic>>[];
+    List<String> strList(Object? v) => (v is List) 
+        ? v.whereType<String>().toList(growable: false) 
+        : const <String>[];
+        
+    List<Map<String, dynamic>> mapList(Object? v) => (v is List) 
+        ? v.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList(growable: false) 
+        : const <Map<String, dynamic>>[];
 
     final accountTypeRaw = (row['account_type'] ?? row['accountType'] ?? 'personal').toString();
     final accountType = AccountType.values.firstWhere(
@@ -83,7 +88,7 @@ class FirestoreUserService {
   }
 
   // ==========================================================================
-  // LECTURE
+  // MÉTHODES DE LECTURE
   // ==========================================================================
 
   Future<AppUser?> fetchUserByUid(String uid) async {
@@ -132,7 +137,7 @@ class FirestoreUserService {
   }
 
   // ==========================================================================
-  // MÉTHODES POUR LE DASHBOARD
+  // MÉTHODES POUR LE DASHBOARD (addPaymentTransaction, streamPayments, logSecurityEvent, streamSecurityEvents)
   // ==========================================================================
 
   Future<void> addPaymentTransaction({
@@ -145,11 +150,47 @@ class FirestoreUserService {
     String? transactionRef,
     Map<String, dynamic>? meta,
   }) async {
-    debugPrint('addPaymentTransaction: uid=$uid, title=$title, amount=$amount');
+    try {
+      final txRef = transactionRef ?? 'tx_${DateTime.now().millisecondsSinceEpoch}_${uid.substring(0, uid.length >= 6 ? 6 : uid.length)}';
+      await _client.from('thix_payments').insert({
+        'user_id': uid,
+        'tx_ref': txRef,
+        'method': '$method • $title',
+        'amount': amount,
+        'currency': currency,
+        'status': status,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+      if (meta != null && meta.isNotEmpty) {
+        try {
+          await _client.from('thix_payment_meta').insert({
+            'user_id': uid,
+            'tx_ref': txRef,
+            'meta': meta,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('FirestoreUserService: addPaymentTransaction failed uid=$uid err=$e');
+    }
   }
 
   Stream<List<Map<String, dynamic>>> streamPayments(String uid) async* {
-    yield [];
+    while (true) {
+      try {
+        final rows = await _client.from('thix_payments').select('*').eq('user_id', uid).order('created_at', ascending: false).limit(50);
+        if (rows is List) {
+          yield rows.map((e) => (e as Map).cast<String, dynamic>()).toList(growable: false);
+        } else {
+          yield const <Map<String, dynamic>>[];
+        }
+      } catch (e) {
+        debugPrint('FirestoreUserService: streamPayments failed uid=$uid err=$e');
+        yield const <Map<String, dynamic>>[];
+      }
+      await Future<void>.delayed(const Duration(seconds: 3));
+    }
   }
 
   Future<void> logSecurityEvent({
@@ -158,15 +199,38 @@ class FirestoreUserService {
     String? label,
     Map<String, dynamic>? meta,
   }) async {
-    debugPrint('logSecurityEvent: uid=$uid, type=$type');
+    try {
+      await _client.from('thix_security_events').insert({
+        'user_id': uid,
+        'type': type,
+        'label': label,
+        'meta': meta ?? const <String, dynamic>{},
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('FirestoreUserService: logSecurityEvent failed uid=$uid err=$e');
+    }
   }
 
   Stream<List<Map<String, dynamic>>> streamSecurityEvents(String uid) async* {
-    yield [];
+    while (true) {
+      try {
+        final rows = await _client.from('thix_security_events').select('*').eq('user_id', uid).order('created_at', ascending: false).limit(40);
+        if (rows is List) {
+          yield rows.map((e) => (e as Map).cast<String, dynamic>()).toList(growable: false);
+        } else {
+          yield const <Map<String, dynamic>>[];
+        }
+      } catch (e) {
+        debugPrint('FirestoreUserService: streamSecurityEvents failed uid=$uid err=$e');
+        yield const <Map<String, dynamic>>[];
+      }
+      await Future<void>.delayed(const Duration(seconds: 4));
+    }
   }
 
   // ==========================================================================
-  // MISE À JOUR SIMPLIFIÉE
+  // MÉTHODES DE MISE À JOUR
   // ==========================================================================
 
   Future<void> updateProfile({
@@ -178,128 +242,20 @@ class FirestoreUserService {
     final patch = <String, dynamic>{
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
+    
     if (displayName != null) patch['display_name'] = displayName;
     if (thixChat != null) patch['thix_chat'] = thixChat;
+
     await _client.from(_table).update(patch).eq('id', sessionUid);
   }
-
-  // ==========================================================================
-  // MISE À JOUR COMPLÈTE (pour le dashboard)
-  // ==========================================================================
-
-  Future<void> updateProfileFull({
-    required String uid,
-    String? fullName,
-    String? competence,
-    String? bio,
-    String? countryOrOrigin,
-    String? contactPhone,
-    String? maritalStatus,
-    String? gender,
-    String? occupation,
-    String? profession,
-    String? dateOfBirth,
-    String? placeOfBirth,
-    String? nationality,
-    String? address,
-    String? emergencyContactName,
-    String? emergencyContactPhone,
-    String? emergencyContactRelation,
-    String? originProvince,
-    String? originTerritory,
-    String? originSector,
-    String? residenceCountry,
-    String? residenceProvince,
-    String? residenceTerritory,
-    String? residenceCity,
-    String? residenceCommune,
-    String? residenceQuarter,
-    String? bloodGroup,
-    bool? hasPhysicalDisability,
-    String? physicalDisabilityDescription,
-    String? nationalityNumber,
-    String? idDocumentType,
-    String? idDocumentIssueDate,
-    String? idDocumentExpiryDate,
-    String? idDocumentIssuePlace,
-    String? idDocumentFrontDocId,
-    String? idDocumentBackDocId,
-    String? idDocumentSelfieDocId,
-    String? idVerificationStatus,
-    List<String>? languages,
-    List<Map<String, dynamic>>? languagesDetailed,
-    String? photoUrl,
-    bool? biometricsEnabled,
-    bool? twoFaEnabled,
-  }) async {
-    final sessionUid = _requireAuthedUid();
-    final patch = <String, dynamic>{
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    };
-    
-    // N'ajouter que les champs non nuls
-    if (fullName != null) patch['full_name'] = fullName;
-    if (competence != null) patch['competence'] = competence;
-    if (bio != null) patch['bio'] = bio;
-    if (countryOrOrigin != null) patch['country_or_origin'] = countryOrOrigin;
-    if (contactPhone != null) patch['contact_phone'] = contactPhone;
-    if (maritalStatus != null) patch['marital_status'] = maritalStatus;
-    if (gender != null) patch['gender'] = gender;
-    if (occupation != null) patch['occupation'] = occupation;
-    if (profession != null) patch['profession'] = profession;
-    if (dateOfBirth != null) patch['date_of_birth'] = dateOfBirth;
-    if (placeOfBirth != null) patch['place_of_birth'] = placeOfBirth;
-    if (nationality != null) patch['nationality'] = nationality;
-    if (address != null) patch['address'] = address;
-    if (emergencyContactName != null) patch['emergency_contact_name'] = emergencyContactName;
-    if (emergencyContactPhone != null) patch['emergency_contact_phone'] = emergencyContactPhone;
-    if (emergencyContactRelation != null) patch['emergency_contact_relation'] = emergencyContactRelation;
-    if (originProvince != null) patch['origin_province'] = originProvince;
-    if (originTerritory != null) patch['origin_territory'] = originTerritory;
-    if (originSector != null) patch['origin_sector'] = originSector;
-    if (residenceCountry != null) patch['residence_country'] = residenceCountry;
-    if (residenceProvince != null) patch['residence_province'] = residenceProvince;
-    if (residenceTerritory != null) patch['residence_territory'] = residenceTerritory;
-    if (residenceCity != null) patch['residence_city'] = residenceCity;
-    if (residenceCommune != null) patch['residence_commune'] = residenceCommune;
-    if (residenceQuarter != null) patch['residence_quarter'] = residenceQuarter;
-    if (bloodGroup != null) patch['blood_group'] = bloodGroup;
-    if (hasPhysicalDisability != null) patch['has_physical_disability'] = hasPhysicalDisability;
-    if (physicalDisabilityDescription != null) patch['physical_disability_description'] = physicalDisabilityDescription;
-    if (nationalityNumber != null) patch['nationality_number'] = nationalityNumber;
-    if (idDocumentType != null) patch['id_document_type'] = idDocumentType;
-    if (idDocumentIssueDate != null) patch['id_document_issue_date'] = idDocumentIssueDate;
-    if (idDocumentExpiryDate != null) patch['id_document_expiry_date'] = idDocumentExpiryDate;
-    if (idDocumentIssuePlace != null) patch['id_document_issue_place'] = idDocumentIssuePlace;
-    if (idDocumentFrontDocId != null) patch['id_document_front_doc_id'] = idDocumentFrontDocId;
-    if (idDocumentBackDocId != null) patch['id_document_back_doc_id'] = idDocumentBackDocId;
-    if (idDocumentSelfieDocId != null) patch['id_document_selfie_doc_id'] = idDocumentSelfieDocId;
-    if (idVerificationStatus != null) patch['id_verification_status'] = idVerificationStatus;
-    if (languages != null) patch['languages'] = languages;
-    if (languagesDetailed != null) patch['languages_detailed'] = languagesDetailed;
-    if (photoUrl != null) patch['avatar_url'] = photoUrl;
-    if (biometricsEnabled != null) patch['biometrics_enabled'] = biometricsEnabled;
-    if (twoFaEnabled != null) patch['two_fa_enabled'] = twoFaEnabled;
-
-    try {
-      if (patch.length > 1) { // plus que 'updated_at'
-        await _client.from(_table).update(patch).eq('id', sessionUid);
-      }
-    } catch (e) {
-      debugPrint('FirestoreUserService: updateProfileFull failed uid=$uid err=$e');
-      // Ne pas relancer l'erreur pour ne pas casser l'UI
-    }
-  }
-
-  // ==========================================================================
-  // THIX ID
-  // ==========================================================================
 
   Future<String> ensureThixId({required String uid}) async {
     final sessionUid = _requireAuthedUid();
     final row = await _client.from(_table).select('thix_id').eq('id', sessionUid).maybeSingle();
     final existing = (row?['thix_id'] ?? '').toString().trim();
+    
     if (existing.isNotEmpty && existing != 'THIX-PENDING') return existing;
+
     final candidate = ThixIdService.generate();
     await _client.from(_table).update({'thix_id': candidate}).eq('id', sessionUid);
     return candidate;
@@ -309,7 +265,9 @@ class FirestoreUserService {
     final sessionUid = _requireAuthedUid();
     final row = await _client.from(_table).select('thix_id').eq('id', sessionUid).maybeSingle();
     final existing = (row?['thix_id'] ?? '').toString().trim();
+    
     if (existing.isNotEmpty && existing != 'THIX-PENDING') return existing;
+
     final candidate = ThixIdService.generate();
     await _client.from(_table).update({'thix_id': candidate}).eq('id', sessionUid);
     return candidate;
