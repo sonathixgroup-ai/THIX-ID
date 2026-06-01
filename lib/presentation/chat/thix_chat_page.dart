@@ -345,14 +345,14 @@ class _ThixChatPageState extends State<ThixChatPage> with SingleTickerProviderSt
                 ],
               ),
             ),
-            // BARRE DE RECHERCHE FLOTTANTE
+            // BARRE DE RECHERCHE FLOTTANTE (REDIMENSIONNÉE)
             Transform.translate(
               offset: const Offset(0, -26),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
-                  height: 68,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  height: 56,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(34),
@@ -360,7 +360,7 @@ class _ThixChatPageState extends State<ThixChatPage> with SingleTickerProviderSt
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.search_rounded, color: Colors.grey, size: 28),
+                      const Icon(Icons.search_rounded, color: Colors.grey, size: 24),
                       const SizedBox(width: 14),
                       Expanded(
                         child: GestureDetector(
@@ -370,7 +370,7 @@ class _ThixChatPageState extends State<ThixChatPage> with SingleTickerProviderSt
                             decoration: InputDecoration(
                               border: InputBorder.none,
                               hintText: "Rechercher un contact ou message...",
-                              hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 16),
+                              hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
                             ),
                           ),
                         ),
@@ -378,13 +378,13 @@ class _ThixChatPageState extends State<ThixChatPage> with SingleTickerProviderSt
                       GestureDetector(
                         onTap: _openNewChat,
                         child: Container(
-                          width: 50,
-                          height: 50,
+                          width: 44,
+                          height: 44,
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: LinearGradient(colors: [Color(0xFFB8860B), Color(0xFFD4AF37)]),
                           ),
-                          child: const Icon(Icons.edit_rounded, color: Colors.white),
+                          child: const Icon(Icons.edit_rounded, color: Colors.white, size: 22),
                         ),
                       ),
                     ],
@@ -419,10 +419,13 @@ class _ThixChatPageState extends State<ThixChatPage> with SingleTickerProviderSt
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 52,
-        height: 52,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white24)),
-        child: Icon(icon, color: const Color(0xFFD4AF37)),
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Icon(icon, color: const Color(0xFFD4AF37), size: 20),
       ),
     );
   }
@@ -442,53 +445,54 @@ class _ThixChatPageState extends State<ThixChatPage> with SingleTickerProviderSt
   }
 
   Widget _buildCallsTab(AppUser me) {
-  return Padding(
-    padding: const EdgeInsets.all(20),
-    child: Column(
-      children: [
-        ElevatedButton.icon(
-          onPressed: () => _openCalls(),
-          icon: const Icon(Icons.call),
-          label: const Text("Démarrer un appel"),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFD4AF37),
-            foregroundColor: Colors.black,
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          ElevatedButton.icon(
+            onPressed: () => _openCalls(),
+            icon: const Icon(Icons.call),
+            label: const Text("Démarrer un appel"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD4AF37),
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
-        Expanded(
-          child: StreamBuilder<List<ThixCall>>(
-            stream: Stream.value([]),  // ✅ temporaire – pas d’erreur
-            builder: (context, snapshot) {
-              final calls = snapshot.data ?? [];
-              if (calls.isEmpty) {
-                return const Center(
-                  child: Text(
-                    "Aucun appel récent",
-                    style: TextStyle(color: Color(0xFF6C6C7A)),
-                  ),
-                );
-              }
-              return ListView.separated(
-                itemCount: calls.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, i) {
-                  final call = calls[i];
-                  return ListTile(
-                    leading: const Icon(Icons.call),
-                    title: Text(call.callerId == me.id ? "Appel sortant" : "Appel entrant"),
-                    subtitle: Text(call.status),
-                    trailing: Text(_formatTime(call.startedAt)),
+          const SizedBox(height: 20),
+          Expanded(
+            child: StreamBuilder<List<ThixCall>>(
+              stream: Stream.value([]),
+              builder: (context, snapshot) {
+                final calls = snapshot.data ?? [];
+                if (calls.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      "Aucun appel récent",
+                      style: TextStyle(color: Color(0xFF6C6C7A)),
+                    ),
                   );
-                },
-              );
-            },
+                }
+                return ListView.separated(
+                  itemCount: calls.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, i) {
+                    final call = calls[i];
+                    return ListTile(
+                      leading: const Icon(Icons.call),
+                      title: Text(call.callerId == me.id ? "Appel sortant" : "Appel entrant"),
+                      subtitle: Text(call.status),
+                      trailing: Text(_formatTime(call.startedAt)),
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   String _formatTime(DateTime? dt) {
     if (dt == null) return '';
@@ -501,38 +505,38 @@ class _ThixChatPageState extends State<ThixChatPage> with SingleTickerProviderSt
   }
 
   Widget _buildBottomNav() {
-  return Padding(
-    padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(34),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          height: 84,
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.92), borderRadius: BorderRadius.circular(34)),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _navItem(Icons.home_filled, "Accueil", onTap: () => context.go(AppRoutes.home)),
-              _navItem(Icons.grid_view_rounded, "Services", onTap: () => context.go(AppRoutes.home)), // ← corrigé (plus d'erreur)
-              Container(
-                width: 68,
-                height: 68,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: [Color(0xFF07122A), Color(0xFF001B5E)]),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(34),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            height: 72,
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.92), borderRadius: BorderRadius.circular(34)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _navItem(Icons.home_filled, "Accueil", onTap: () => context.go(AppRoutes.home)),
+                _navItem(Icons.grid_view_rounded, "Services", onTap: () => context.go(AppRoutes.home)),
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(colors: [Color(0xFF07122A), Color(0xFF001B5E)]),
+                  ),
+                  child: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFFD4AF37), size: 26),
                 ),
-                child: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFFD4AF37), size: 30),
-              ),
-              _navItem(Icons.chat_bubble_rounded, "Messages", active: true, onTap: () {}),
-              _navItem(Icons.person_outline, "Profil", onTap: () => context.go(AppRoutes.userDashboard)),
-            ],
+                _navItem(Icons.chat_bubble_rounded, "Messages", active: true, onTap: () {}),
+                _navItem(Icons.person_outline, "Profil", onTap: () => context.go(AppRoutes.userDashboard)),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _navItem(IconData icon, String label, {bool active = false, VoidCallback? onTap}) {
     return GestureDetector(
@@ -540,9 +544,9 @@ class _ThixChatPageState extends State<ThixChatPage> with SingleTickerProviderSt
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: active ? const Color(0xFFD4AF37) : Colors.grey),
+          Icon(icon, color: active ? const Color(0xFFD4AF37) : Colors.grey, size: 22),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 11, color: active ? const Color(0xFFD4AF37) : Colors.grey, fontWeight: FontWeight.w600)),
+          Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -655,7 +659,7 @@ class _TopAction extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.full),
           splashFactory: NoSplash.splashFactory,
           child: Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             child: Icon(icon, size: 18, color: onColor ?? scheme.onSurface),
           ),
         ),
@@ -690,7 +694,7 @@ class _ThixHeaderActionButtonState extends State<ThixHeaderActionButton> {
       child: Material(
         color: bg,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(16),
           side: BorderSide(color: Colors.white.withValues(alpha: widget.isPrimary ? 0.0 : 0.20)),
         ),
         child: InkWell(
@@ -699,15 +703,15 @@ class _ThixHeaderActionButtonState extends State<ThixHeaderActionButton> {
           splashFactory: NoSplash.splashFactory,
           highlightColor: Colors.white.withValues(alpha: 0.06),
           hoverColor: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(widget.icon, color: fg, size: 22),
-                const SizedBox(height: 6),
-                Text(widget.label, style: context.textStyles.labelMedium?.copyWith(color: fg, fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Icon(widget.icon, color: fg, size: 20),
+                const SizedBox(height: 4),
+                Text(widget.label, style: context.textStyles.labelMedium?.copyWith(color: fg, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -798,8 +802,8 @@ class _ThixChatsTabState extends State<ThixChatsTab> {
                               debugPrint('ChatsTab: mark all read failed err=$e');
                             }
                           },
-                    style: TextButton.styleFrom(foregroundColor: scheme.tertiary),
-                    child: const Text('Tout marquer lu'),
+                    style: TextButton.styleFrom(foregroundColor: scheme.tertiary, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                    child: const Text('Tout marquer lu', style: TextStyle(fontSize: 12)),
                   ),
                 ],
               ),
@@ -855,7 +859,7 @@ class _TemplateSearchField extends StatelessWidget {
         hintText: 'Rechercher une conversation…',
         filled: true,
         fillColor: scheme.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.full), borderSide: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6))),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.full), borderSide: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6))),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.full), borderSide: BorderSide(color: scheme.tertiary.withValues(alpha: 0.9), width: 1.4)),
@@ -918,7 +922,6 @@ class _ThixCallLauncherSheetState extends State<ThixCallLauncherSheet> {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
-
       final chatId = await widget.chat.getOrCreateDirectChat(me: widget.me, other: other);
       final callId = await widget.calls.startCall(chatId: chatId, kind: _kind, receiverId: c.uid);
       if (!mounted) return;
@@ -1305,7 +1308,7 @@ class ThixChatListTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: const EdgeInsets.all(12),
           child: Row(
             children: [
               ThixAvatarChip(icon: leadingIcon ?? Icons.person_rounded),
@@ -1349,7 +1352,7 @@ class ThixAvatarChip extends StatelessWidget {
         gradient: AppPremiumGradients.thixNavyToGold(scheme),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(8),
         child: Icon(icon, size: 18, color: scheme.onPrimary),
       ),
     );
@@ -1416,10 +1419,10 @@ class ThixChatEmptyState extends StatelessWidget {
                       backgroundColor: scheme.tertiary,
                       foregroundColor: scheme.onTertiary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
                     ),
                     icon: Icon(Icons.person_search_rounded, size: 18, color: scheme.onTertiary),
-                    label: Text(actionLabel!, style: context.textStyles.labelLarge?.copyWith(color: scheme.onTertiary, fontWeight: FontWeight.w900)),
+                    label: Text(actionLabel!, style: context.textStyles.labelLarge?.copyWith(color: scheme.onTertiary, fontWeight: FontWeight.w800)),
                   ),
                 ),
               ],
@@ -1552,10 +1555,10 @@ class _ThixStartChatByThixIdSheetState extends State<ThixStartChatByThixIdSheet>
                     backgroundColor: scheme.tertiary,
                     foregroundColor: scheme.onTertiary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   icon: Icon(Icons.chat_rounded, size: 18, color: scheme.onTertiary),
-                  label: Text(_busy ? '...' : 'Ouvrir le chat', style: context.textStyles.labelLarge?.copyWith(color: scheme.onTertiary, fontWeight: FontWeight.w900)),
+                  label: Text(_busy ? '...' : 'Ouvrir le chat', style: context.textStyles.labelLarge?.copyWith(color: scheme.onTertiary, fontWeight: FontWeight.w800)),
                 ),
               ),
             ],
@@ -1655,7 +1658,7 @@ class _ThixStatusComposerState extends State<ThixStatusComposer> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Mon statut', style: context.textStyles.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            Text('Mon statut', style: context.textStyles.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: AppSpacing.sm),
             TextField(
               controller: _c,
@@ -1682,7 +1685,7 @@ class _ThixStatusComposerState extends State<ThixStatusComposer> {
                       backgroundColor: scheme.primary,
                       foregroundColor: scheme.onPrimary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     icon: const Icon(Icons.send_rounded, size: 18),
                     label: Text(_busy ? '...' : 'Publier', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w800)),
@@ -1717,14 +1720,14 @@ class _ComposerIconButton extends StatelessWidget {
       child: Material(
         color: scheme.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.full),
+          borderRadius: BorderRadius.circular(30),
           side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
         ),
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(AppRadius.full),
+          borderRadius: BorderRadius.circular(30),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(8),
             child: Icon(icon, size: 18, color: scheme.onSurface),
           ),
         ),
@@ -1760,7 +1763,7 @@ class ThixStatusCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(update.displayName, style: context.textStyles.titleMedium?.copyWith(fontWeight: FontWeight.w900), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(update.displayName, style: context.textStyles.titleMedium?.copyWith(fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
                       Text(
                         _statusMeta(update),
@@ -1801,7 +1804,7 @@ class ThixStatusCard extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 child: Text(
                                   update.statusType.toUpperCase(),
-                                  style: context.textStyles.labelSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 0.2),
+                                  style: context.textStyles.labelSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 0.2),
                                 ),
                               ),
                             ),
@@ -2035,14 +2038,14 @@ class _ThixChatThreadSheetState extends State<ThixChatThreadSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(widget.otherName, style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w900), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(widget.otherName, style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 2),
                         StreamBuilder<List<String>>(
                           stream: widget.chat.streamTypingUsers(chatId: widget.chatId, excludeUid: widget.me.id),
                           builder: (context, snap) {
                             final typing = (snap.data ?? const <String>[]).isNotEmpty;
                             if (typing) {
-                              return Text('Écrit…', style: context.textStyles.labelSmall?.copyWith(color: scheme.primary.withValues(alpha: 0.95), fontWeight: FontWeight.w900));
+                              return Text('Écrit…', style: context.textStyles.labelSmall?.copyWith(color: scheme.primary.withValues(alpha: 0.95), fontWeight: FontWeight.w800));
                             }
                             return StreamBuilder<DateTime?>(
                               stream: widget.chat.streamReadAt(chatId: widget.chatId, uid: widget.otherUid),
@@ -2126,14 +2129,14 @@ class _ThreadAction extends StatelessWidget {
       child: Material(
         color: scheme.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.full),
+          borderRadius: BorderRadius.circular(30),
           side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
         ),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.full),
+          borderRadius: BorderRadius.circular(30),
           child: Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             child: Icon(icon, size: 18, color: scheme.onSurface),
           ),
         ),
@@ -2200,7 +2203,7 @@ class ThixThreadComposer extends StatelessWidget {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.full), borderSide: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6))),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.full), borderSide: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6))),
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.full), borderSide: BorderSide(color: scheme.primary.withValues(alpha: 0.8), width: 1.2)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   ),
                 ),
               ),
@@ -2210,7 +2213,7 @@ class ThixThreadComposer extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: scheme.tertiary,
                   foregroundColor: scheme.onTertiary,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
                 ),
                 child: Icon(Icons.send_rounded, color: scheme.onTertiary, size: 18),
@@ -2254,7 +2257,7 @@ class ThixMessageBubble extends StatelessWidget {
                 if (!isMine)
                   Text(
                     message.senderName.isEmpty ? 'Utilisateur' : message.senderName,
-                    style: context.textStyles.labelSmall?.copyWith(color: fg.withValues(alpha: 0.85), fontWeight: FontWeight.w900),
+                    style: context.textStyles.labelSmall?.copyWith(color: fg.withValues(alpha: 0.85), fontWeight: FontWeight.w800),
                   ),
                 if (!isMine) const SizedBox(height: 6),
                 if (isMoney)
@@ -2333,16 +2336,16 @@ class ThixMoneyBubble extends StatelessWidget {
             Expanded(
               child: Text(
                 'Transfert',
-                style: context.textStyles.titleMedium?.copyWith(color: isMine ? scheme.onPrimary : scheme.onSurface, fontWeight: FontWeight.w900),
+                style: context.textStyles.titleMedium?.copyWith(color: isMine ? scheme.onPrimary : scheme.onSurface, fontWeight: FontWeight.w800),
               ),
             ),
             DecoratedBox(
               decoration: BoxDecoration(color: tagBg, borderRadius: BorderRadius.circular(AppRadius.full)),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 child: Text(
                   status.toUpperCase(),
-                  style: context.textStyles.labelSmall?.copyWith(color: tagFg, fontWeight: FontWeight.w900, letterSpacing: 0.2),
+                  style: context.textStyles.labelSmall?.copyWith(color: tagFg, fontWeight: FontWeight.w800, letterSpacing: 0.2),
                 ),
               ),
             ),
@@ -2351,7 +2354,7 @@ class ThixMoneyBubble extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           '$amount $currency',
-          style: context.textStyles.headlineMedium?.copyWith(color: isMine ? scheme.onPrimary : scheme.onSurface, fontWeight: FontWeight.w900),
+          style: context.textStyles.headlineMedium?.copyWith(color: isMine ? scheme.onPrimary : scheme.onSurface, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 4),
         Text(
@@ -2451,7 +2454,7 @@ class _ThixChatSearchSheetState extends State<ThixChatSearchSheet> {
             children: [
               Row(
                 children: [
-                  Expanded(child: Text('Rechercher', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+                  Expanded(child: Text('Rechercher', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w800))),
                   _ThreadAction(icon: Icons.close_rounded, tooltip: 'Fermer', onTap: () => context.pop()),
                 ],
               ),
@@ -2464,6 +2467,7 @@ class _ThixChatSearchSheetState extends State<ThixChatSearchSheet> {
                   filled: true,
                   fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -2536,7 +2540,7 @@ class ThixChatNewChatSheet extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(child: Text('Nouveau chat', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+                  Expanded(child: Text('Nouveau chat', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w800))),
                   _ThreadAction(icon: Icons.close_rounded, tooltip: 'Fermer', onTap: () => context.pop()),
                 ],
               ),
@@ -2601,11 +2605,11 @@ class ThixChatNewChatSheet extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: scheme.onSurface,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.8)),
                   ),
                   icon: const Icon(Icons.person_search_rounded, size: 18),
-                  label: Text('Trouver par THIX ID', style: context.textStyles.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
+                  label: Text('Trouver par THIX ID', style: context.textStyles.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -2628,10 +2632,10 @@ class ThixChatNewChatSheet extends StatelessWidget {
                     backgroundColor: scheme.primary,
                     foregroundColor: scheme.onPrimary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                   icon: Icon(Icons.group_add_rounded, size: 18, color: scheme.onPrimary),
-                  label: Text('Créer un groupe', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w900)),
+                  label: Text('Créer un groupe', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w800)),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -2810,12 +2814,12 @@ class _ThixGroupComposerSheetState extends State<ThixGroupComposerSheet> {
             children: [
               Row(
                 children: [
-                  Expanded(child: Text('Nouveau groupe', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+                  Expanded(child: Text('Nouveau groupe', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w800))),
                   _ThreadAction(icon: Icons.close_rounded, tooltip: 'Fermer', onTap: () => context.pop()),
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
-              TextField(controller: _title, decoration: const InputDecoration(labelText: 'Nom du groupe', prefixIcon: Icon(Icons.badge_rounded))),
+              TextField(controller: _title, decoration: const InputDecoration(labelText: 'Nom du groupe', prefixIcon: Icon(Icons.badge_rounded), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10))),
               const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _q,
@@ -2829,6 +2833,7 @@ class _ThixGroupComposerSheetState extends State<ThixGroupComposerSheet> {
                   fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
                   prefixIcon: const Icon(Icons.search_rounded),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -2885,10 +2890,10 @@ class _ThixGroupComposerSheetState extends State<ThixGroupComposerSheet> {
                     backgroundColor: scheme.primary,
                     foregroundColor: scheme.onPrimary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                   icon: Icon(Icons.check_rounded, size: 18, color: scheme.onPrimary),
-                  label: Text(_busy ? '...' : 'Créer', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w900)),
+                  label: Text(_busy ? '...' : 'Créer', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w800)),
                 ),
               ),
             ],
@@ -2983,16 +2988,16 @@ class _ThixMeetingComposerSheetState extends State<ThixMeetingComposerSheet> {
             children: [
               Row(
                 children: [
-                  Expanded(child: Text('Créer un meeting', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+                  Expanded(child: Text('Créer un meeting', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w800))),
                   _ThreadAction(icon: Icons.close_rounded, tooltip: 'Fermer', onTap: () => context.pop()),
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
-              TextField(controller: _title, decoration: const InputDecoration(labelText: 'Titre', prefixIcon: Icon(Icons.event_rounded))),
+              TextField(controller: _title, decoration: const InputDecoration(labelText: 'Titre', prefixIcon: Icon(Icons.event_rounded), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10))),
               const SizedBox(height: AppSpacing.sm),
-              TextField(controller: _location, decoration: const InputDecoration(labelText: 'Lieu (optionnel)', prefixIcon: Icon(Icons.place_rounded))),
+              TextField(controller: _location, decoration: const InputDecoration(labelText: 'Lieu (optionnel)', prefixIcon: Icon(Icons.place_rounded), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10))),
               const SizedBox(height: AppSpacing.sm),
-              TextField(controller: _note, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Note (optionnel)', prefixIcon: Icon(Icons.notes_rounded))),
+              TextField(controller: _note, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Note (optionnel)', prefixIcon: Icon(Icons.notes_rounded), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10))),
               const SizedBox(height: AppSpacing.md),
               Material(
                 color: scheme.surface,
@@ -3008,7 +3013,7 @@ class _ThixMeetingComposerSheetState extends State<ThixMeetingComposerSheet> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Quand', style: context.textStyles.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
+                            Text('Quand', style: context.textStyles.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
                             const SizedBox(height: 4),
                             Text(_when.toLocal().toString().substring(0, 16), style: context.textStyles.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.7))),
                           ],
@@ -3019,6 +3024,7 @@ class _ThixMeetingComposerSheetState extends State<ThixMeetingComposerSheet> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: scheme.onSurface,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         ),
                         icon: const Icon(Icons.schedule_rounded, size: 18),
                         label: const Text('Choisir'),
@@ -3030,7 +3036,7 @@ class _ThixMeetingComposerSheetState extends State<ThixMeetingComposerSheet> {
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
-                  Expanded(child: Text('Durée (min)', style: context.textStyles.labelLarge?.copyWith(fontWeight: FontWeight.w900))),
+                  Expanded(child: Text('Durée (min)', style: context.textStyles.labelLarge?.copyWith(fontWeight: FontWeight.w800))),
                   SegmentedButton<int>(
                     segments: const [
                       ButtonSegment(value: 15, label: Text('15')),
@@ -3051,10 +3057,10 @@ class _ThixMeetingComposerSheetState extends State<ThixMeetingComposerSheet> {
                     backgroundColor: scheme.primary,
                     foregroundColor: scheme.onPrimary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                   icon: const Icon(Icons.send_rounded, size: 18),
-                  label: Text(_busy ? '...' : 'Envoyer', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w900)),
+                  label: Text(_busy ? '...' : 'Envoyer', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w800)),
                 ),
               ),
             ],
@@ -3079,106 +3085,6 @@ class ThixMoneyComposerSheet extends StatefulWidget {
 
   @override
   State<ThixMoneyComposerSheet> createState() => _ThixMoneyComposerSheetState();
-}
-
-class _IncomingCallSheet extends StatelessWidget {
-  final String kind;
-  final String callerId;
-  final VoidCallback onDecline;
-  final VoidCallback onAccept;
-  const _IncomingCallSheet({required this.kind, required this.callerId, required this.onDecline, required this.onAccept});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final isVideo = kind == 'video';
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.42,
-        decoration: BoxDecoration(
-          color: scheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-          border: Border(top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6))),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppPremiumGradients.thixNavyToGold(scheme),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(isVideo ? Icons.videocam_rounded : Icons.call_rounded, size: 18, color: scheme.onPrimary),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Appel entrant', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 4),
-                        Text(
-                          'De: $callerId',
-                          style: context.textStyles.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.70)),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                isVideo ? 'Quelqu’un t’appelle en vidéo.' : 'Quelqu’un t’appelle en audio.',
-                style: context.textStyles.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.70), height: 1.45),
-              ),
-              const Spacer(),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onDecline,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: scheme.onSurface,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
-                        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.9)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      icon: const Icon(Icons.call_end_rounded, size: 18),
-                      label: Text('Refuser', style: context.textStyles.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: onAccept,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: scheme.primary,
-                        foregroundColor: scheme.onPrimary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      icon: Icon(Icons.call_rounded, size: 18, color: scheme.onPrimary),
-                      label: Text('Accepter', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w900)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _ThixMoneyComposerSheetState extends State<ThixMoneyComposerSheet> {
@@ -3248,7 +3154,7 @@ class _ThixMoneyComposerSheetState extends State<ThixMoneyComposerSheet> {
             children: [
               Row(
                 children: [
-                  Expanded(child: Text('Transfert (sans wallet)', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+                  Expanded(child: Text('Transfert (sans wallet)', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w800))),
                   _ThreadAction(icon: Icons.close_rounded, tooltip: 'Fermer', onTap: () => context.pop()),
                 ],
               ),
@@ -3258,29 +3164,29 @@ class _ThixMoneyComposerSheetState extends State<ThixMoneyComposerSheet> {
                 style: context.textStyles.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.70), height: 1.45),
               ),
               const SizedBox(height: AppSpacing.md),
-              TextField(controller: _sender, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Numéro expéditeur', prefixIcon: Icon(Icons.phone_rounded))),
+              TextField(controller: _sender, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Numéro expéditeur', prefixIcon: Icon(Icons.phone_rounded), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10))),
               const SizedBox(height: AppSpacing.sm),
-              TextField(controller: _receiver, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Numéro destinataire', prefixIcon: Icon(Icons.phone_android_rounded))),
+              TextField(controller: _receiver, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Numéro destinataire', prefixIcon: Icon(Icons.phone_android_rounded), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10))),
               const SizedBox(height: AppSpacing.sm),
-              TextField(controller: _network, decoration: const InputDecoration(labelText: 'Réseau (ex: Orange / MTN)', prefixIcon: Icon(Icons.cell_tower_rounded))),
+              TextField(controller: _network, decoration: const InputDecoration(labelText: 'Réseau (ex: Orange / MTN)', prefixIcon: Icon(Icons.cell_tower_rounded), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10))),
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
-                  Expanded(child: TextField(controller: _amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Montant', prefixIcon: Icon(Icons.money_rounded)))),
+                  Expanded(child: TextField(controller: _amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Montant', prefixIcon: Icon(Icons.money_rounded), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)))),
                   const SizedBox(width: AppSpacing.sm),
                   SizedBox(
                     width: 92,
-                    child: TextField(controller: _currency, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Devise')),
+                    child: TextField(controller: _currency, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Devise', contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10))),
                   ),
                 ],
               ),
               const SizedBox(height: AppSpacing.sm),
-              TextField(controller: _note, minLines: 1, maxLines: 2, decoration: const InputDecoration(labelText: 'Note (optionnel)', prefixIcon: Icon(Icons.edit_note_rounded))),
+              TextField(controller: _note, minLines: 1, maxLines: 2, decoration: const InputDecoration(labelText: 'Note (optionnel)', prefixIcon: Icon(Icons.edit_note_rounded), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10))),
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: _password,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Mot de passe de confirmation', prefixIcon: Icon(Icons.lock_rounded)),
+                decoration: const InputDecoration(labelText: 'Mot de passe de confirmation', prefixIcon: Icon(Icons.lock_rounded), contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10)),
               ),
               const Spacer(),
               SizedBox(
@@ -3291,11 +3197,111 @@ class _ThixMoneyComposerSheetState extends State<ThixMoneyComposerSheet> {
                     backgroundColor: scheme.primary,
                     foregroundColor: scheme.onPrimary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                   icon: const Icon(Icons.send_rounded, size: 18),
-                  label: Text(_busy ? '...' : 'Envoyer', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w900)),
+                  label: Text(_busy ? '...' : 'Envoyer', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w800)),
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IncomingCallSheet extends StatelessWidget {
+  final String kind;
+  final String callerId;
+  final VoidCallback onDecline;
+  final VoidCallback onAccept;
+  const _IncomingCallSheet({required this.kind, required this.callerId, required this.onDecline, required this.onAccept});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isVideo = kind == 'video';
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.42,
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+          border: Border(top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6))),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: AppPremiumGradients.thixNavyToGold(scheme),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(isVideo ? Icons.videocam_rounded : Icons.call_rounded, size: 18, color: scheme.onPrimary),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Appel entrant', style: context.textStyles.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 4),
+                        Text(
+                          'De: $callerId',
+                          style: context.textStyles.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.70)),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                isVideo ? 'Quelqu’un t’appelle en vidéo.' : 'Quelqu’un t’appelle en audio.',
+                style: context.textStyles.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.70), height: 1.45),
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onDecline,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: scheme.onSurface,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
+                        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.9)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      icon: const Icon(Icons.call_end_rounded, size: 18),
+                      label: Text('Refuser', style: context.textStyles.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: onAccept,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: scheme.primary,
+                        foregroundColor: scheme.onPrimary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.full)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      icon: Icon(Icons.call_rounded, size: 18, color: scheme.onPrimary),
+                      label: Text('Accepter', style: context.textStyles.labelLarge?.copyWith(color: scheme.onPrimary, fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
