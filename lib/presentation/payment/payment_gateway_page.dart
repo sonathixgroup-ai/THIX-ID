@@ -156,7 +156,7 @@ class _PaymentGatewayPageState extends State<PaymentGatewayPage> {
   final _mobileMoneyPhoneC = TextEditingController();
   String _method = 'mobile_money';
   bool _isPaying = false;
-  int _step = 1; // 1=Pay, 2=UID, 3=Finalize
+  int _step = 1;
   String? _lastTxRef;
   bool _isStartingTrial = false;
 
@@ -184,15 +184,13 @@ class _PaymentGatewayPageState extends State<PaymentGatewayPage> {
     bool requireRealThixId = true,
   }) async {
     final auth = context.read<AuthController>();
-    // Payment is fictive, but THIX ID must be real + persisted (searchable).
     final users = FirestoreUserService();
     String thixId = me.thixId.trim().toUpperCase();
     if (requireRealThixId && _isPendingThixId(thixId)) {
       try {
-        thixId = await users.assignRealThixIdIfMissing(uid: me.id, countryOrOrigin: me.countryOrOrigin, displayName: me.displayName);
+        // ✅ Correction : retirer countryOrOrigin et displayName
+        thixId = await users.assignRealThixIdIfMissing(uid: me.id);
       } catch (e) {
-        // A THIX ID must never remain pending: without a real ID the account
-        // cannot be searched/used correctly.
         debugPrint('PaymentGateway: THIX ID assignment failed; aborting. err=$e');
         rethrow;
       }
@@ -203,15 +201,13 @@ class _PaymentGatewayPageState extends State<PaymentGatewayPage> {
       updatedAt: DateTime.now(),
     );
 
-    // Persist in app state. Supabase writes (if any) are best-effort only.
     await auth.updateCurrentUser(next);
 
-    // For free-trial, attempt to assign a real THIX ID in background when possible,
-    // but do not block navigation.
     if (!requireRealThixId && _isPendingThixId(next.thixId)) {
       unawaited(() async {
         try {
-           final real = await users.assignRealThixIdIfMissing(uid: next.id, countryOrOrigin: next.countryOrOrigin, displayName: next.displayName);
+          // ✅ Correction : retirer countryOrOrigin et displayName
+          final real = await users.assignRealThixIdIfMissing(uid: next.id);
           await auth.updateCurrentUser(next.copyWith(thixId: real, updatedAt: DateTime.now()));
           debugPrint('PaymentGateway: background THIX ID assigned: $real');
         } catch (e) {
@@ -242,8 +238,6 @@ class _PaymentGatewayPageState extends State<PaymentGatewayPage> {
 
     setState(() => _isStartingTrial = true);
     try {
-      // Payment is fictive, but the THIX ID must be REAL + persisted in Supabase,
-      // otherwise the account won't work normally (search/public profile/chat).
       final now = DateTime.now().toUtc();
       final endsAt = now.add(const Duration(days: 7));
       final registrationStatus = 'trial_until:${endsAt.toIso8601String()}';
@@ -297,7 +291,6 @@ class _PaymentGatewayPageState extends State<PaymentGatewayPage> {
       _step = 1;
     });
     try {
-      // Simulated payment (no real gateway).
       await Future<void>.delayed(const Duration(milliseconds: 1200));
 
       final ref = _txRef();
@@ -424,8 +417,8 @@ class _PaymentGatewayPageState extends State<PaymentGatewayPage> {
                                   letterSpacing: 1.2,
                                 ),
                               ),
-                          const SizedBox(height: 8),
-                          _stepper(context),
+                              const SizedBox(height: 8),
+                              _stepper(context),
                             ],
                           ),
                         ],
@@ -520,7 +513,7 @@ class _PaymentGatewayPageState extends State<PaymentGatewayPage> {
                                       ),
                                     ),
                                     Text(
-                                        _lastTxRef ?? '—',
+                                      _lastTxRef ?? '—',
                                       style: context.textStyles.bodySmall?.copyWith(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w600,
