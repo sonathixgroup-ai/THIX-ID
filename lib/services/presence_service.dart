@@ -9,7 +9,11 @@ class ThixPresence {
   final bool isOnline;
   final DateTime lastSeenAt;
 
-  const ThixPresence({required this.userId, required this.isOnline, required this.lastSeenAt});
+  const ThixPresence({
+    required this.userId,
+    required this.isOnline,
+    required this.lastSeenAt,
+  });
 
   static DateTime _dt(Object? v) {
     if (v is DateTime) return v;
@@ -27,6 +31,7 @@ class ThixPresence {
 class PresenceService {
   static const String table = 'thix_presence';
   final SupabaseClient _client;
+
   PresenceService({SupabaseClient? client}) : _client = client ?? SupabaseConfig.client;
 
   Timer? _heartbeat;
@@ -46,7 +51,6 @@ class PresenceService {
     try {
       await _client.rpc('pgrst_schema_reload');
     } catch (e) {
-      // Some deployments expose it as an Edge Function instead.
       try {
         await _client.functions.invoke('pgrst_schema_reload', body: const {});
       } catch (_) {}
@@ -74,8 +78,6 @@ class PresenceService {
     }
   }
 
-  /// Starts a lightweight heartbeat to keep `last_seen_at` fresh while the user
-  /// is actively using the app.
   void startHeartbeat({Duration interval = const Duration(seconds: 30)}) {
     _heartbeat?.cancel();
     _heartbeat = Timer.periodic(interval, (_) => unawaited(setOnline(true)));
@@ -89,7 +91,6 @@ class PresenceService {
   Stream<ThixPresence?> streamPresence(String userId) {
     final controller = StreamController<ThixPresence?>.broadcast();
     final channel = _client.channel('presence:$userId');
-    final filter = PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'user_id', value: userId);
 
     Future<void> emitLatest() async {
       try {
@@ -98,7 +99,7 @@ class PresenceService {
           controller.add(null);
           return;
         }
-        controller.add(ThixPresence.fromRow((row as Map).cast<String, dynamic>()));
+        controller.add(ThixPresence.fromRow(row));
       } catch (e) {
         if (_isTableMissing(e)) {
           debugPrint('PresenceService: table missing/cache stale. Disabling presence stream until DB is ready. err=$e');
@@ -111,8 +112,20 @@ class PresenceService {
     }
 
     controller.onListen = () => unawaited(emitLatest());
+
+    // Correction principale ici :
     channel
-        .onPostgresChanges(event: PostgresChangeEvent.all, schema: 'public', table: table, filter: filter, callback: (_) => emitLatest())
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: table,
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (_) => emitLatest(),
+        )
         .subscribe((status, err) {
       if (err != null) debugPrint('PresenceService: realtime subscribe status=$status error=$err');
     });
